@@ -1,18 +1,16 @@
-import React, { useRef, useState, useEffect, Suspense } from "react";
+import React, { useRef, useState, useEffect, Suspense, useMemo } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls, Stars, Html, useTexture, Loader } from "@react-three/drei";
 import * as THREE from "three";
 import { motion } from "framer-motion";
 
-// --- 1. ASSETS (Dynamic Path Handling) ---
-// process.env.PUBLIC_URL handles the difference between Localhost (root) and GitHub Pages (/solar-system) automatically.
+// --- 1. ASSETS ---
 const BASE = process.env.PUBLIC_URL;
-
 const TEXTURES = {
   sun: `${BASE}/textures/sun.jpg`,
   mercury: `${BASE}/textures/2k_mercury.jpg`,
   venus: `${BASE}/textures/2k_venus_surface.jpg`,
-  earth: `${BASE}/textures/earth_atmos_2048.jpg`,
+  earth: `${BASE}/textures/earth_atmos_2048.jpg`, 
   mars: `${BASE}/textures/2k_mars.jpg`,
   jupiter: `${BASE}/textures/2k_jupiter.jpg`,
   saturn: `${BASE}/textures/2k_saturn.jpg`,
@@ -22,29 +20,118 @@ const TEXTURES = {
   moon: `${BASE}/textures/2k_moon.jpg`
 };
 
-// --- 2. VISUALS ---
+// --- 2. PLANET DATA ---
+const PLANET_DATA = {
+  Sun: { diameter: "1,392,700 km", day: "25 Days", year: "N/A", temp: "5,500°C", info: "The star at the center of our Solar System. Its gravity holds the system together." },
+  Mercury: { diameter: "4,880 km", day: "59 days", year: "88 days", temp: "167°C", info: "Smallest planet, closest to the Sun. It has a thin exosphere and extreme temperature swings." },
+  Venus: { diameter: "12,104 km", day: "243 days", year: "225 days", temp: "464°C", info: "Hottest planet due to a thick toxic atmosphere creating a runaway greenhouse effect." },
+  Earth: { diameter: "12,742 km", day: "24 hours", year: "365 days", temp: "15°C", info: "The only known planet to support life, with liquid water covering 70% of its surface." },
+  Mars: { diameter: "6,779 km", day: "24.6 hours", year: "687 days", temp: "-65°C", info: "The 'Red Planet', home to Olympus Mons (largest volcano) and Valles Marineris (largest canyon)." },
+  Jupiter: { diameter: "139,820 km", day: "9.9 hours", year: "11.8 years", temp: "-110°C", info: "Largest planet, a gas giant. It has a Great Red Spot storm and over 90 moons." },
+  Saturn: { diameter: "116,460 km", day: "10.7 hours", year: "29 years", temp: "-140°C", info: "Famous for its complex ring system made of ice and rock particles." },
+  Uranus: { diameter: "50,724 km", day: "17 hours", year: "84 years", temp: "-195°C", info: "An ice giant that rotates on its side (98° tilt), likely due to a massive collision." },
+  Neptune: { diameter: "49,244 km", day: "16 hours", year: "165 years", temp: "-200°C", info: "The windiest planet with supersonic winds. It was the first planet predicted by math." }
+};
 
-function Sun() {
+// --- 3. SHADERS (Volumetric Glow) ---
+const glowShader = {
+  uniforms: {
+    c: { type: "f", value: 0.1 },
+    p: { type: "f", value: 4.0 },
+    glowColor: { type: "c", value: new THREE.Color(0xff8c00) },
+    viewVector: { type: "v3", value: new THREE.Vector3(0, 0, 0) },
+  },
+  vertexShader: `
+    uniform vec3 viewVector;
+    uniform float c;
+    uniform float p;
+    varying float intensity;
+    void main() {
+      vec3 vNormal = normalize( normalMatrix * normal );
+      vec3 vViewPosition = normalize( modelViewMatrix * vec4( position, 1.0 ) ).xyz;
+      intensity = pow( c - dot(vNormal, vViewPosition), p );
+      gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
+    }
+  `,
+  fragmentShader: `
+    uniform vec3 glowColor;
+    varying float intensity;
+    void main() {
+      gl_FragColor = vec4( glowColor * intensity, 1.0 );
+    }
+  `,
+};
+
+// --- 4. VISUAL COMPONENTS ---
+
+function SunGlow({ color, size }) {
   const meshRef = useRef();
-  const texture = useTexture(TEXTURES.sun);
+  const { camera } = useThree();
+  
+  const uniforms = useMemo(() => ({
+    c: { value: 0.1 },
+    p: { value: 4.0 },
+    glowColor: { value: new THREE.Color(color) },
+    viewVector: { value: new THREE.Vector3() }
+  }), [color]);
 
-  useFrame(({ clock }) => {
+  useFrame(() => {
     if (meshRef.current) {
-        meshRef.current.rotation.y -= 0.002;
+      uniforms.viewVector.value.copy(camera.position).normalize();
+      meshRef.current.material.uniforms.viewVector.value.copy(uniforms.viewVector.value);
     }
   });
 
   return (
+    <mesh ref={meshRef}>
+      <sphereGeometry args={[size * 1.2, 64, 64]} />
+      <shaderMaterial
+        attach="material"
+        args={[glowShader]}
+        uniforms={uniforms}
+        side={THREE.FrontSide}
+        blending={THREE.AdditiveBlending}
+        transparent={true}
+        depthWrite={false}
+      />
+    </mesh>
+  );
+}
+
+function Sun({ onPlanetClick, isActive }) {
+  const meshRef = useRef();
+  const texture = useTexture(TEXTURES.sun);
+  const size = 8;
+
+  useFrame(() => {
+    if (meshRef.current) meshRef.current.rotation.y -= 0.002;
+  });
+
+  const handleClick = (e) => {
+    e.stopPropagation();
+    onPlanetClick({ name: "Sun", position: new THREE.Vector3(0, 0, 0), size: size });
+  };
+
+  const data = PLANET_DATA["Sun"];
+
+  return (
     <group>
-      <mesh ref={meshRef}>
-        <sphereGeometry args={[8, 64, 64]} />
-        <meshBasicMaterial map={texture} color="#ffffff" />
-        <pointLight intensity={3000} distance={1000} decay={1.5} color="#ffddaa" />
+      <mesh ref={meshRef} onClick={handleClick} onPointerOver={() => (document.body.style.cursor = "pointer")} onPointerOut={() => (document.body.style.cursor = "auto")}>
+        <sphereGeometry args={[size, 64, 64]} />
+        {/* toneMapped=false ensures the sun stays bright regardless of lighting */}
+        <meshBasicMaterial map={texture} color="#ffffff" toneMapped={false} /> 
       </mesh>
-      <mesh scale={[1.2, 1.2, 1.2]}>
-        <sphereGeometry args={[8, 32, 32]} />
-        <meshBasicMaterial color="#FF8C00" transparent opacity={0.2} side={THREE.BackSide} />
-      </mesh>
+      
+      <SunGlow color="#FF8C00" size={size} />
+      
+      {/* FIX: High Intensity (5.0) + No Decay for bright planets, Low Ambient for dark nights */}
+      <pointLight intensity={5.0} distance={2000} decay={0} color="#ffddaa" />
+
+      {isActive && (
+          <Html position={[0, size * 1.3, 0]} center style={{ pointerEvents: 'none', zIndex: 100 }}>
+            <InfoCard data={data} name="SUN" />
+          </Html>
+      )}
     </group>
   );
 }
@@ -54,7 +141,6 @@ function AnimatedStars() {
   useFrame(() => {
     if (starsRef.current) {
       starsRef.current.rotation.y += 0.00001; 
-      starsRef.current.rotation.x += 0.000005;
     }
   });
   return <Stars ref={starsRef} radius={300} depth={60} count={20000} factor={6} saturation={0} fade speed={0.5} />;
@@ -63,7 +149,7 @@ function AnimatedStars() {
 function OrbitPath({ radius }) {
   return (
     <mesh rotation={[-Math.PI / 2, 0, 0]}>
-      <ringGeometry args={[radius - 0.15, radius + 0.15, 256]} />
+      <ringGeometry args={[radius - 0.05, radius + 0.05, 256]} />
       <meshBasicMaterial color="#888" transparent opacity={0.35} side={THREE.DoubleSide} />
     </mesh>
   );
@@ -78,15 +164,76 @@ function Hitbox({ size, onClick }) {
   );
 }
 
-// --- 3. PLANET COMPONENTS ---
-
-function PlanetRing({ textureKey, size }) {
-  const texture = useTexture(TEXTURES[textureKey]);
-  texture.rotation = Math.PI / 2; 
-  
+// Reusable Info Card Component
+function InfoCard({ data, name }) {
   return (
-    <mesh rotation={[-Math.PI / 2, 0, 0]}>
-      <ringGeometry args={[size * 1.4, size * 2.4, 128]} />
+    <motion.div 
+      initial={{ opacity: 0, scale: 0.8, y: 20 }}
+      animate={{ opacity: 1, scale: 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.5 }}
+      transition={{ duration: 0.3 }}
+      style={{ 
+        background: "rgba(10, 15, 30, 0.9)", 
+        backdropFilter: "blur(12px)",
+        WebkitBackdropFilter: "blur(12px)",
+        color: "white", 
+        padding: "20px", 
+        borderRadius: "16px", 
+        width: "280px", 
+        maxWidth: "90vw", // Mobile responsive
+        border: "1px solid rgba(100, 200, 255, 0.3)",
+        boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
+        fontFamily: "'Inter', sans-serif",
+        textAlign: "left"
+      }}
+    >
+      <h3 style={{ margin: "0 0 12px 0", color: "#4db5ff", fontSize: "20px", textTransform: "uppercase", letterSpacing: "1px" }}>{name}</h3>
+      
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", fontSize: "12px", color: "#ccc", marginBottom: "15px" }}>
+        <div><strong>Dia:</strong> {data.diameter}</div>
+        <div><strong>Temp:</strong> {data.temp}</div>
+        <div><strong>Day:</strong> {data.day}</div>
+        <div><strong>Year:</strong> {data.year}</div>
+        <div style={{gridColumn: "1 / -1"}}><strong>Moons:</strong> {data.moons || "0"}</div>
+      </div>
+      
+      <p style={{ fontSize: "13px", lineHeight: "1.5", color: "#eee", margin: "0 0 15px 0" }}>{data.info}</p>
+      
+      <div style={{ fontSize: "11px", color: "#888", fontStyle: "italic", borderTop: "1px solid rgba(255,255,255,0.1)", paddingTop: "10px", textAlign: "center" }}>
+        Scroll to zoom out
+      </div>
+    </motion.div>
+  );
+}
+
+// --- 5. PLANET COMPONENTS ---
+
+function PlanetRing({ textureKey, size, isVertical }) {
+  const texture = useTexture(TEXTURES[textureKey]);
+  const geometryRef = useRef();
+
+  useEffect(() => {
+    if (geometryRef.current && texture) {
+      const geo = geometryRef.current;
+      const pos = geo.attributes.position;
+      const uvs = geo.attributes.uv;
+      
+      for (let i = 0; i < pos.count; i++) {
+         const x = pos.getX(i);
+         const y = pos.getY(i);
+         const len = Math.sqrt(x * x + y * y);
+         const u = (len - (size * 1.4)) / ((size * 2.4) - (size * 1.4));
+         uvs.setXY(i, u, 0.5); 
+      }
+      uvs.needsUpdate = true;
+    }
+  }, [size, texture]);
+  
+  const rotation = isVertical ? [0, 0, 0] : [-Math.PI / 2, 0, 0];
+
+  return (
+    <mesh rotation={rotation}>
+      <ringGeometry ref={geometryRef} args={[size * 1.4, size * 2.4, 128]} />
       <meshStandardMaterial map={texture} opacity={0.8} transparent side={THREE.DoubleSide} />
     </mesh>
   );
@@ -105,12 +252,13 @@ function Planet({
   hasAtmosphere, 
   hasRings,
   ringTextureKey,
+  isVerticalRing, 
   tilt = 0 
 }) {
   const orbitGroupRef = useRef();
   const spinMeshRef = useRef();
   
-  const texture = useTexture(TEXTURES[textureKey]);
+  const texture = useTexture(TEXTURES[textureKey] || TEXTURES.moon);
   const angleRef = useRef(startAngle); 
 
   useFrame((state, delta) => {
@@ -130,20 +278,24 @@ function Planet({
     onPlanetClick({ name, position: orbitGroupRef.current.position, size });
   };
 
+  const data = PLANET_DATA[name] || {};
+
   return (
     <group>
       <OrbitPath radius={distance} />
       
       <group ref={orbitGroupRef}>
-        <group rotation={[tilt, 0, 0]}>
+        <group rotation={[tilt, 0, isVerticalRing ? Math.PI / 2 : 0]}>
             <group ref={spinMeshRef}>
                 <mesh 
                 onClick={handleClick}
                 onPointerOver={() => (document.body.style.cursor = "pointer")}
                 onPointerOut={() => (document.body.style.cursor = "auto")}
+                castShadow receiveShadow
                 >
                 <sphereGeometry args={[size, 64, 64]} />
-                <meshStandardMaterial map={texture} metalness={0.1} roughness={0.7} />
+                {/* Metalness 0.2, Roughness 0.8 makes it react to light but not look like plastic */}
+                <meshStandardMaterial map={texture} metalness={0.2} roughness={0.8} />
                 </mesh>
                 
                 {hasAtmosphere && (
@@ -154,40 +306,16 @@ function Planet({
                 )}
             </group>
 
-            {hasRings && <PlanetRing textureKey={ringTextureKey} size={size} />}
+            {hasRings && (
+              <PlanetRing textureKey={ringTextureKey} size={size} isVertical={isVerticalRing} />
+            )}
         </group>
 
         <Hitbox size={size} onClick={handleClick} />
 
         {isActive && (
           <Html position={[0, size + 2.5, 0]} center style={{ pointerEvents: 'none', zIndex: 100 }}>
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.8, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.5 }}
-              transition={{ duration: 0.3 }}
-              style={{ 
-                background: "rgba(10, 10, 20, 0.85)", 
-                backdropFilter: "blur(16px)",
-                WebkitBackdropFilter: "blur(16px)",
-                color: "white", 
-                padding: "12px", 
-                borderRadius: "12px", 
-                width: "max-content",
-                maxWidth: "80vw",
-                border: "1px solid rgba(77, 181, 255, 0.3)",
-                boxShadow: "0 10px 40px rgba(0,0,0,0.6)",
-                fontFamily: "'Inter', sans-serif",
-                textAlign: "center"
-              }}
-            >
-              <h3 style={{ margin: "0 0 4px 0", color: "#4db5ff", textTransform: "uppercase", letterSpacing: "2px", fontSize: "14px" }}>{name}</h3>
-              <div style={{ fontSize: "10px", color: "#bbb", lineHeight: "1.4" }}>
-                <p style={{ margin: "2px 0" }}>Dist: {distance} AU</p>
-                <p style={{ margin: "2px 0 4px 0" }}>Speed: {orbitSpeed}x</p>
-                <div style={{ width: "1px", height: "10px", background: "rgba(77,181,255,0.5)", margin: "5px auto 0 auto" }}></div>
-              </div>
-            </motion.div>
+            <InfoCard data={data} name={name} />
           </Html>
         )}
       </group>
@@ -195,7 +323,7 @@ function Planet({
   );
 }
 
-// --- 4. CAMERA CONTROLLER ---
+// --- 6. CAMERA CONTROLLER ---
 function CameraController({ focusedPlanet, setFocusedPlanet }) {
   const { camera, controls } = useThree();
   const isTransitioning = useRef(false);
@@ -224,7 +352,7 @@ function CameraController({ focusedPlanet, setFocusedPlanet }) {
         goalLookAt = new THREE.Vector3(focusedPlanet.position.x, focusedPlanet.position.y, focusedPlanet.position.z);
         
         const sunDirection = new THREE.Vector3(0, 0, 0).sub(goalLookAt).normalize();
-        const zoomDistance = focusedPlanet.size * 6 + 12;
+        const zoomDistance = focusedPlanet.name === "Sun" ? focusedPlanet.size * 4 : focusedPlanet.size * 6 + 12;
         
         goalPos = goalLookAt.clone().add(sunDirection.multiplyScalar(zoomDistance));
         goalPos.y += focusedPlanet.size * 2; 
@@ -259,7 +387,7 @@ function CameraController({ focusedPlanet, setFocusedPlanet }) {
   return null;
 }
 
-// --- 5. MAIN APP ---
+// --- 7. MAIN APP ---
 export default function App() {
   const [focusedPlanet, setFocusedPlanet] = useState(null);
   const isPaused = focusedPlanet !== null;
@@ -298,11 +426,12 @@ export default function App() {
       )}
 
       <Canvas camera={{ position: [0, 150, 200], fov: 45 }} dpr={[1, 2]} shadows>
-        <ambientLight intensity={0.1} /> 
+        {/* FIX: Very Low Ambient Light (0.03) for dark shadows, but not total void */}
+        <ambientLight intensity={0.03} /> 
         <AnimatedStars />
         
         <Suspense fallback={null}>
-          <Sun />
+          <Sun onPlanetClick={setFocusedPlanet} isActive={focusedPlanet?.name === "Sun"} />
           
           <Planet name="Mercury" textureKey="mercury" distance={30} startAngle={0} orbitSpeed={1.5} size={1.0} 
             onPlanetClick={setFocusedPlanet} isActive={focusedPlanet?.name === "Mercury"} isPaused={isPaused} 
@@ -330,7 +459,7 @@ export default function App() {
           />
 
           <Planet name="Uranus" textureKey="uranus" distance={240} startAngle={0.5} orbitSpeed={0.1} size={2.8} 
-            tilt={1.5} 
+            hasRings={true} ringTextureKey="uranus" isVerticalRing={true} tilt={0} 
             onPlanetClick={setFocusedPlanet} isActive={focusedPlanet?.name === "Uranus"} isPaused={isPaused} 
           />
 
@@ -343,7 +472,7 @@ export default function App() {
         <OrbitControls 
           enablePan={false} 
           minDistance={5} 
-          maxDistance={800} 
+          maxDistance={1200} 
           enableDamping={true} 
           dampingFactor={0.05} 
           rotateSpeed={0.6}
