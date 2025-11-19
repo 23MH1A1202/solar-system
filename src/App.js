@@ -33,7 +33,7 @@ const PLANET_DATA = {
   Neptune: { diameter: "49,244 km", day: "16 hours", year: "165 years", temp: "-200°C", info: "The windiest planet with supersonic winds. It was the first planet predicted by math." }
 };
 
-// --- 3. SHADERS (Volumetric Glow) ---
+// --- 3. SHADERS ---
 const glowShader = {
   uniforms: {
     c: { type: "f", value: 0.1 },
@@ -118,13 +118,11 @@ function Sun({ onPlanetClick, isActive }) {
     <group>
       <mesh ref={meshRef} onClick={handleClick} onPointerOver={() => (document.body.style.cursor = "pointer")} onPointerOut={() => (document.body.style.cursor = "auto")}>
         <sphereGeometry args={[size, 64, 64]} />
-        {/* toneMapped=false ensures the sun stays bright regardless of lighting */}
         <meshBasicMaterial map={texture} color="#ffffff" toneMapped={false} /> 
       </mesh>
       
       <SunGlow color="#FF8C00" size={size} />
       
-      {/* FIX: High Intensity (5.0) + No Decay for bright planets, Low Ambient for dark nights */}
       <pointLight intensity={5.0} distance={2000} decay={0} color="#ffddaa" />
 
       {isActive && (
@@ -143,7 +141,8 @@ function AnimatedStars() {
       starsRef.current.rotation.y += 0.00001; 
     }
   });
-  return <Stars ref={starsRef} radius={300} depth={60} count={20000} factor={6} saturation={0} fade speed={0.5} />;
+  // FIX: Increased radius to 5000 so you can zoom out without exiting the star sphere
+  return <Stars ref={starsRef} radius={5000} depth={50} count={5000} factor={4} saturation={0} fade speed={1} />;
 }
 
 function OrbitPath({ radius }) {
@@ -164,7 +163,6 @@ function Hitbox({ size, onClick }) {
   );
 }
 
-// Reusable Info Card Component
 function InfoCard({ data, name }) {
   return (
     <motion.div 
@@ -180,7 +178,7 @@ function InfoCard({ data, name }) {
         padding: "20px", 
         borderRadius: "16px", 
         width: "280px", 
-        maxWidth: "90vw", // Mobile responsive
+        maxWidth: "90vw", 
         border: "1px solid rgba(100, 200, 255, 0.3)",
         boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
         fontFamily: "'Inter', sans-serif",
@@ -294,7 +292,6 @@ function Planet({
                 castShadow receiveShadow
                 >
                 <sphereGeometry args={[size, 64, 64]} />
-                {/* Metalness 0.2, Roughness 0.8 makes it react to light but not look like plastic */}
                 <meshStandardMaterial map={texture} metalness={0.2} roughness={0.8} />
                 </mesh>
                 
@@ -425,8 +422,8 @@ export default function App() {
         </button>
       )}
 
-      <Canvas camera={{ position: [0, 150, 200], fov: 45 }} dpr={[1, 2]} shadows>
-        {/* FIX: Very Low Ambient Light (0.03) for dark shadows, but not total void */}
+      {/* FIX: Increased 'far' plane to 10000 so Sun doesn't disappear when zooming out */}
+      <Canvas camera={{ position: [0, 150, 200], fov: 45, far: 10000 }} dpr={[1, 2]} shadows>
         <ambientLight intensity={0.03} /> 
         <AnimatedStars />
         
@@ -459,7 +456,7 @@ export default function App() {
           />
 
           <Planet name="Uranus" textureKey="uranus" distance={240} startAngle={0.5} orbitSpeed={0.1} size={2.8} 
-            hasRings={true} ringTextureKey="uranus" isVerticalRing={true} tilt={0} 
+            hasRings={true} ringTextureKey="saturnRing" isVerticalRing={true} tilt={0} 
             onPlanetClick={setFocusedPlanet} isActive={focusedPlanet?.name === "Uranus"} isPaused={isPaused} 
           />
 
