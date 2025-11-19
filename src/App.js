@@ -141,7 +141,7 @@ function AnimatedStars() {
       starsRef.current.rotation.y += 0.00001; 
     }
   });
-  return <Stars ref={starsRef} radius={300} depth={60} count={20000} factor={6} saturation={0} fade speed={0.5} />;
+  return <Stars ref={starsRef} radius={5000} depth={60} count={20000} factor={6} saturation={0} fade speed={0.5} />;
 }
 
 function OrbitPath({ radius }) {
@@ -453,7 +453,7 @@ export default function App() {
         </button>
       )}
 
-      <Canvas camera={{ position: [0, 150, 200], fov: 45 }} dpr={[1, 2]} shadows>
+      <Canvas camera={{ position: [0, 150, 200], fov: 45, far: 20000 }} dpr={[1, 2]} shadows>
         <ambientLight intensity={0.03} /> 
         <AnimatedStars />
         
