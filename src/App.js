@@ -10,7 +10,7 @@ const TEXTURES = {
   sun: `${BASE}/textures/sun.jpg`,
   mercury: `${BASE}/textures/2k_mercury.jpg`,
   venus: `${BASE}/textures/2k_venus_surface.jpg`,
-  earth: `${BASE}/textures/earth_atmos_2048.jpg`, 
+  earth: `${BASE}/textures/earth_atmos_2048.jpg`,
   mars: `${BASE}/textures/2k_mars.jpg`,
   jupiter: `${BASE}/textures/2k_jupiter.jpg`,
   saturn: `${BASE}/textures/2k_saturn.jpg`,
@@ -20,17 +20,17 @@ const TEXTURES = {
   moon: `${BASE}/textures/2k_moon.jpg`
 };
 
-// --- 2. PLANET DATA ---
+// --- 2. DATA ---
 const PLANET_DATA = {
-  Sun: { diameter: "1,392,700 km", day: "25 Days", year: "N/A", temp: "5,500°C", info: "The star at the center of our Solar System. Its gravity holds the system together." },
-  Mercury: { diameter: "4,880 km", day: "59 days", year: "88 days", temp: "167°C", info: "Smallest planet, closest to the Sun. It has a thin exosphere and extreme temperature swings." },
-  Venus: { diameter: "12,104 km", day: "243 days", year: "225 days", temp: "464°C", info: "Hottest planet due to a thick toxic atmosphere creating a runaway greenhouse effect." },
-  Earth: { diameter: "12,742 km", day: "24 hours", year: "365 days", temp: "15°C", info: "The only known planet to support life, with liquid water covering 70% of its surface." },
-  Mars: { diameter: "6,779 km", day: "24.6 hours", year: "687 days", temp: "-65°C", info: "The 'Red Planet', home to Olympus Mons (largest volcano) and Valles Marineris (largest canyon)." },
-  Jupiter: { diameter: "139,820 km", day: "9.9 hours", year: "11.8 years", temp: "-110°C", info: "Largest planet, a gas giant. It has a Great Red Spot storm and over 90 moons." },
-  Saturn: { diameter: "116,460 km", day: "10.7 hours", year: "29 years", temp: "-140°C", info: "Famous for its complex ring system made of ice and rock particles." },
-  Uranus: { diameter: "50,724 km", day: "17 hours", year: "84 years", temp: "-195°C", info: "An ice giant that rotates on its side (98° tilt), likely due to a massive collision." },
-  Neptune: { diameter: "49,244 km", day: "16 hours", year: "165 years", temp: "-200°C", info: "The windiest planet with supersonic winds. It was the first planet predicted by math." }
+  Sun: { diameter: "1,392,700 km", day: "25 Days", year: "N/A", temp: "5,500°C", info: "The star at the center of our Solar System." },
+  Mercury: { diameter: "4,880 km", day: "59 days", year: "88 days", temp: "167°C", info: "Smallest planet, closest to the Sun." },
+  Venus: { diameter: "12,104 km", day: "243 days", year: "225 days", temp: "464°C", info: "Hottest planet due to greenhouse effect." },
+  Earth: { diameter: "12,742 km", day: "24 hours", year: "365 days", temp: "15°C", info: "The only known planet to support life." },
+  Mars: { diameter: "6,779 km", day: "24.6 hours", year: "687 days", temp: "-65°C", info: "Home to Olympus Mons, the largest volcano." },
+  Jupiter: { diameter: "139,820 km", day: "9.9 hours", year: "11.8 years", temp: "-110°C", info: "Largest planet, a gas giant with storms." },
+  Saturn: { diameter: "116,460 km", day: "10.7 hours", year: "29 years", temp: "-140°C", info: "Famous for its complex, beautiful rings." },
+  Uranus: { diameter: "50,724 km", day: "17 hours", year: "84 years", temp: "-195°C", info: "Rotates on its side with vertical rings." },
+  Neptune: { diameter: "49,244 km", day: "16 hours", year: "165 years", temp: "-200°C", info: "The windiest planet, deep blue ice giant." }
 };
 
 // --- 3. SHADERS ---
@@ -141,8 +141,7 @@ function AnimatedStars() {
       starsRef.current.rotation.y += 0.00001; 
     }
   });
-  // FIX: Increased radius to 5000 so you can zoom out without exiting the star sphere
-  return <Stars ref={starsRef} radius={5000} depth={50} count={5000} factor={4} saturation={0} fade speed={1} />;
+  return <Stars ref={starsRef} radius={300} depth={60} count={20000} factor={6} saturation={0} fade speed={0.5} />;
 }
 
 function OrbitPath({ radius }) {
@@ -192,7 +191,6 @@ function InfoCard({ data, name }) {
         <div><strong>Temp:</strong> {data.temp}</div>
         <div><strong>Day:</strong> {data.day}</div>
         <div><strong>Year:</strong> {data.year}</div>
-        <div style={{gridColumn: "1 / -1"}}><strong>Moons:</strong> {data.moons || "0"}</div>
       </div>
       
       <p style={{ fontSize: "13px", lineHeight: "1.5", color: "#eee", margin: "0 0 15px 0" }}>{data.info}</p>
@@ -205,6 +203,35 @@ function InfoCard({ data, name }) {
 }
 
 // --- 5. PLANET COMPONENTS ---
+
+// --- NEW: Moon Component ---
+function Moon({ size, distance, orbitSpeed }) {
+  const moonRef = useRef();
+  const texture = useTexture(TEXTURES.moon);
+  const angleRef = useRef(Math.random() * Math.PI * 2);
+
+  useFrame((state, delta) => {
+    if (moonRef.current) {
+      // Orbit around the parent (Earth)
+      angleRef.current += delta * orbitSpeed * 0.5;
+      const x = Math.sin(angleRef.current) * distance;
+      const z = Math.cos(angleRef.current) * distance;
+      moonRef.current.position.set(x, 0, z);
+      
+      // Spin
+      moonRef.current.rotation.y += 0.01;
+    }
+  });
+
+  return (
+    <group ref={moonRef}>
+      <mesh castShadow receiveShadow>
+        <sphereGeometry args={[size, 32, 32]} />
+        <meshStandardMaterial map={texture} metalness={0.1} roughness={0.8} />
+      </mesh>
+    </group>
+  );
+}
 
 function PlanetRing({ textureKey, size, isVertical }) {
   const texture = useTexture(TEXTURES[textureKey]);
@@ -251,7 +278,8 @@ function Planet({
   hasRings,
   ringTextureKey,
   isVerticalRing, 
-  tilt = 0 
+  tilt = 0,
+  children // Allow nesting (for Moon)
 }) {
   const orbitGroupRef = useRef();
   const spinMeshRef = useRef();
@@ -307,6 +335,9 @@ function Planet({
               <PlanetRing textureKey={ringTextureKey} size={size} isVertical={isVerticalRing} />
             )}
         </group>
+        
+        {/* Render Children (like the Moon) inside the Orbit Group so they move with the planet */}
+        {children}
 
         <Hitbox size={size} onClick={handleClick} />
 
@@ -422,8 +453,7 @@ export default function App() {
         </button>
       )}
 
-      {/* FIX: Increased 'far' plane to 10000 so Sun doesn't disappear when zooming out */}
-      <Canvas camera={{ position: [0, 150, 200], fov: 45, far: 10000 }} dpr={[1, 2]} shadows>
+      <Canvas camera={{ position: [0, 150, 200], fov: 45 }} dpr={[1, 2]} shadows>
         <ambientLight intensity={0.03} /> 
         <AnimatedStars />
         
@@ -438,9 +468,12 @@ export default function App() {
             onPlanetClick={setFocusedPlanet} isActive={focusedPlanet?.name === "Venus"} isPaused={isPaused} 
           />
 
+          {/* Earth with the new Moon child */}
           <Planet name="Earth" textureKey="earth" distance={65} startAngle={2} orbitSpeed={0.8} size={2.0} hasAtmosphere={true}
             onPlanetClick={setFocusedPlanet} isActive={focusedPlanet?.name === "Earth"} isPaused={isPaused} 
-          />
+          >
+             <Moon size={0.5} distance={3.5} orbitSpeed={2.0} />
+          </Planet>
 
           <Planet name="Mars" textureKey="mars" distance={90} startAngle={3.5} orbitSpeed={0.6} size={1.4} 
             onPlanetClick={setFocusedPlanet} isActive={focusedPlanet?.name === "Mars"} isPaused={isPaused} 
@@ -456,7 +489,7 @@ export default function App() {
           />
 
           <Planet name="Uranus" textureKey="uranus" distance={240} startAngle={0.5} orbitSpeed={0.1} size={2.8} 
-            hasRings={true} ringTextureKey="saturnRing" isVerticalRing={true} tilt={0} 
+            hasRings={true} ringTextureKey="uranus" isVerticalRing={true} tilt={0} 
             onPlanetClick={setFocusedPlanet} isActive={focusedPlanet?.name === "Uranus"} isPaused={isPaused} 
           />
 
