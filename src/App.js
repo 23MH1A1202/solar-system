@@ -3,7 +3,6 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls, Stars, Html, useTexture, Loader } from "@react-three/drei";
 import * as THREE from "three";
 import { motion } from "framer-motion";
-
 // --- 1. ASSETS ---
 const BASE = process.env.PUBLIC_URL;
 const TEXTURES = {
