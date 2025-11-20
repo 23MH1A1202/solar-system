@@ -147,11 +147,20 @@ function AnimatedStars() {
 function OrbitPath({ radius }) {
   return (
     <mesh rotation={[-Math.PI / 2, 0, 0]}>
-      <ringGeometry args={[radius - 0.05, radius + 0.05, 256]} />
-      <meshBasicMaterial color="#888" transparent opacity={0.35} side={THREE.DoubleSide} />
+      {/* args: [innerRadius, outerRadius, segments]
+         radius - 0.05 to radius + 0.05 = Total width of 0.1 (Thin and sharp)
+         512 segments = Perfectly smooth circle, no jagged edges
+      */}
+      <ringGeometry args={[radius - 0.05, radius + 0.05, 512]} />
+      
+      {/* color: #FFFFFF (White)
+         opacity: 0.6 (Bright enough to see from far away, but transparent enough to look elegant)
+      */}
+      <meshBasicMaterial color="#FFFFFF" transparent opacity={0.6} side={THREE.DoubleSide} />
     </mesh>
   );
 }
+
 
 function Hitbox({ size, onClick }) {
   return (
