@@ -3,14 +3,15 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls, Stars, Html, useTexture, Loader } from "@react-three/drei";
 import * as THREE from "three";
 import { motion } from "framer-motion";
-// --- 1. ASSETS ---  
 
+// --- 1. ASSETS ---
 const BASE = process.env.PUBLIC_URL;
 const TEXTURES = {
   sun: `${BASE}/textures/sun.jpg`,
   mercury: `${BASE}/textures/2k_mercury.jpg`,
   venus: `${BASE}/textures/2k_venus_surface.jpg`,
   earth: `${BASE}/textures/earth_atmos_2048.jpg`,
+  earthClouds: `${BASE}/textures/2k_earth_clouds.jpg`,
   mars: `${BASE}/textures/2k_mars.jpg`,
   jupiter: `${BASE}/textures/2k_jupiter.jpg`,
   saturn: `${BASE}/textures/2k_saturn.jpg`,
@@ -30,7 +31,8 @@ const PLANET_DATA = {
   Jupiter: { diameter: "139,820 km", day: "9.9 hours", year: "11.8 years", temp: "-110°C", info: "Largest planet, a gas giant with storms." },
   Saturn: { diameter: "116,460 km", day: "10.7 hours", year: "29 years", temp: "-140°C", info: "Famous for its complex, beautiful rings." },
   Uranus: { diameter: "50,724 km", day: "17 hours", year: "84 years", temp: "-195°C", info: "Rotates on its side with vertical rings." },
-  Neptune: { diameter: "49,244 km", day: "16 hours", year: "165 years", temp: "-200°C", info: "The windiest planet, deep blue ice giant." }
+  Neptune: { diameter: "49,244 km", day: "16 hours", year: "165 years", temp: "-200°C", info: "The windiest planet, deep blue ice giant." },
+  Moon: { diameter: "3,474 km", day: "27.3 days", year: "27.3 days", temp: "-53°C", info: "Earth's only natural satellite." }
 };
 
 // --- 3. SHADERS ---
@@ -64,10 +66,57 @@ const glowShader = {
 
 // --- 4. VISUAL COMPONENTS ---
 
+// --- NEW: Asteroid Belt ---
+function AsteroidBelt() {
+  const asteroidRef = useRef();
+  const count = 4000; 
+  const dummy = useMemo(() => new THREE.Object3D(), []);
+  const asteroids = useMemo(() => {
+    const temp = [];
+    for (let i = 0; i < count; i++) {
+      // Between Mars (90) and Jupiter (140)
+      const angle = Math.random() * Math.PI * 2;
+      const radius = 110 + Math.random() * 30; 
+      const x = Math.cos(angle) * radius;
+      const z = Math.sin(angle) * radius;
+      const y = (Math.random() - 0.5) * 10; 
+      const scale = Math.random() * 0.5 + 0.2; 
+      temp.push({ x, y, z, scale, rotation: Math.random() * Math.PI });
+    }
+    return temp;
+  }, []);
+
+  useEffect(() => {
+    if (asteroidRef.current) {
+      asteroids.forEach((data, i) => {
+        dummy.position.set(data.x, data.y, data.z);
+        dummy.rotation.set(data.rotation, data.rotation, data.rotation);
+        dummy.scale.set(data.scale, data.scale, data.scale);
+        dummy.updateMatrix();
+        asteroidRef.current.setMatrixAt(i, dummy.matrix);
+      });
+      asteroidRef.current.instanceMatrix.needsUpdate = true;
+    }
+  }, [asteroids, dummy]);
+
+  useFrame(() => {
+    if (asteroidRef.current) {
+      asteroidRef.current.rotation.y += 0.0005;
+    }
+  });
+
+  return (
+    <instancedMesh ref={asteroidRef} args={[null, null, count]}>
+      <dodecahedronGeometry args={[0.2, 0]} /> 
+      <meshStandardMaterial color="#888888" roughness={0.8} metalness={0.2} />
+    </instancedMesh>
+  );
+}
+
 function SunGlow({ color, size }) {
   const meshRef = useRef();
   const { camera } = useThree();
-  
+
   const uniforms = useMemo(() => ({
     c: { value: 0.1 },
     p: { value: 4.0 },
@@ -147,20 +196,12 @@ function AnimatedStars() {
 function OrbitPath({ radius }) {
   return (
     <mesh rotation={[-Math.PI / 2, 0, 0]}>
-      {/* args: [innerRadius, outerRadius, segments]
-         radius - 0.05 to radius + 0.05 = Total width of 0.1 (Thin and sharp)
-         512 segments = Perfectly smooth circle, no jagged edges
-      */}
-      <ringGeometry args={[radius - 0.05, radius + 0.05, 512]} />
-      
-      {/* color: #FFFFFF (White)
-         opacity: 0.6 (Bright enough to see from far away, but transparent enough to look elegant)
-      */}
-      <meshBasicMaterial color="#FFFFFF" transparent opacity={0.6} side={THREE.DoubleSide} />
+      {/* FIX: Increased width (0.2) and opacity (0.8) for better visibility */}
+      <ringGeometry args={[radius - 0.2, radius + 0.2, 512]} />
+      <meshBasicMaterial color="#FFFFFF" transparent opacity={0.8} side={THREE.DoubleSide} />
     </mesh>
   );
 }
-
 
 function Hitbox({ size, onClick }) {
   return (
@@ -213,8 +254,26 @@ function InfoCard({ data, name }) {
 
 // --- 5. PLANET COMPONENTS ---
 
-// --- NEW: Moon Component ---
-function Moon({ size, distance, orbitSpeed }) {
+// --- NEW: Cloud Component ---
+function PlanetClouds({ textureUrl, size }) {
+  const texture = useTexture(textureUrl);
+  const cloudsRef = useRef();
+
+  useFrame(() => {
+    if (cloudsRef.current) {
+      cloudsRef.current.rotation.y += 0.0015;
+    }
+  });
+
+  return (
+    <mesh ref={cloudsRef} scale={[1.01, 1.01, 1.01]}>
+      <sphereGeometry args={[size, 64, 64]} />
+      <meshStandardMaterial map={texture} transparent={true} opacity={0.8} blending={THREE.AdditiveBlending} side={THREE.DoubleSide} />
+    </mesh>
+  );
+}
+
+function Moon({ size, distance, orbitSpeed, onPlanetClick, isActive, isPaused }) {
   const moonRef = useRef();
   const texture = useTexture(TEXTURES.moon);
   const angleRef = useRef(Math.random() * Math.PI * 2);
@@ -231,13 +290,21 @@ function Moon({ size, distance, orbitSpeed }) {
       moonRef.current.rotation.y += 0.01;
     }
   });
+  
+  const handleClick = (e) => {
+    e.stopPropagation();
+    const worldPosition = new THREE.Vector3();
+    moonRef.current.getWorldPosition(worldPosition);
+    onPlanetClick({ name: "Moon", position: worldPosition, size: size });
+  };
 
   return (
     <group ref={moonRef}>
-      <mesh castShadow receiveShadow>
+      <mesh castShadow receiveShadow onClick={handleClick}>
         <sphereGeometry args={[size, 32, 32]} />
         <meshStandardMaterial map={texture} metalness={0.1} roughness={0.8} />
       </mesh>
+      {isActive && <InfoCard data={PLANET_DATA["Moon"]} name="The Moon" offset={size + 1.5} />}
     </group>
   );
 }
@@ -284,11 +351,12 @@ function Planet({
   isActive, 
   isPaused, 
   hasAtmosphere, 
+  hasClouds, // NEW PROP
   hasRings,
   ringTextureKey,
   isVerticalRing, 
   tilt = 0,
-  children // Allow nesting (for Moon)
+  children
 }) {
   const orbitGroupRef = useRef();
   const spinMeshRef = useRef();
@@ -332,6 +400,9 @@ function Planet({
                 <meshStandardMaterial map={texture} metalness={0.2} roughness={0.8} />
                 </mesh>
                 
+                {/* CLOUDS ADDED HERE */}
+                {hasClouds && <PlanetClouds textureUrl={TEXTURES.earthClouds} size={size} />}
+
                 {hasAtmosphere && (
                 <mesh scale={[1.02, 1.02, 1.02]}>
                     <sphereGeometry args={[size, 64, 64]} />
@@ -345,7 +416,6 @@ function Planet({
             )}
         </group>
         
-        {/* Render Children (like the Moon) inside the Orbit Group so they move with the planet */}
         {children}
 
         <Hitbox size={size} onClick={handleClick} />
@@ -477,16 +547,19 @@ export default function App() {
             onPlanetClick={setFocusedPlanet} isActive={focusedPlanet?.name === "Venus"} isPaused={isPaused} 
           />
 
-          {/* Earth with the new Moon child */}
-          <Planet name="Earth" textureKey="earth" distance={65} startAngle={2} orbitSpeed={0.8} size={2.0} hasAtmosphere={true}
+          {/* EARTH with CLOUDS + MOON */}
+          <Planet name="Earth" textureKey="earth" distance={65} startAngle={2} orbitSpeed={0.8} size={2.0} hasAtmosphere={true} hasClouds={true}
             onPlanetClick={setFocusedPlanet} isActive={focusedPlanet?.name === "Earth"} isPaused={isPaused} 
           >
-             <Moon size={0.5} distance={3.5} orbitSpeed={2.0} />
+             <Moon size={0.5} distance={4} orbitSpeed={2} onPlanetClick={setFocusedPlanet} isActive={focusedPlanet?.name === "Moon"} isPaused={isPaused} />
           </Planet>
 
           <Planet name="Mars" textureKey="mars" distance={90} startAngle={3.5} orbitSpeed={0.6} size={1.4} 
             onPlanetClick={setFocusedPlanet} isActive={focusedPlanet?.name === "Mars"} isPaused={isPaused} 
           />
+
+          {/* ASTEROID BELT */}
+          <AsteroidBelt />
 
           <Planet name="Jupiter" textureKey="jupiter" distance={140} startAngle={4.2} orbitSpeed={0.3} size={5.0} 
             onPlanetClick={setFocusedPlanet} isActive={focusedPlanet?.name === "Jupiter"} isPaused={isPaused} 
@@ -523,3 +596,5 @@ export default function App() {
     </div>
   );
 }
+
+
