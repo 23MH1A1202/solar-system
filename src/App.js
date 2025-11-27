@@ -1,3 +1,5 @@
+
+
 import React, { useRef, useState, useEffect, Suspense, useMemo } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 // FIX: Added 'Loader' to the import list
@@ -541,5 +543,3 @@ export default function App() {
     </div>
   );
 }
-
-
