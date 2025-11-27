@@ -1,10 +1,10 @@
 import React, { useRef, useState, useEffect, Suspense, useMemo } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { OrbitControls, Stars, Html, useTexture, Loader } from "@react-three/drei";
+import { OrbitControls, Stars, useTexture, Loader } from "@react-three/drei";
 import * as THREE from "three";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 
-// --- 1. ASSETS ---
+// --- 1. ASSETS (YOUR EXACT TEXTURES) ---
 const BASE = process.env.PUBLIC_URL;
 const TEXTURES = {
   sun: `${BASE}/textures/sun.jpg`,
@@ -23,57 +23,82 @@ const TEXTURES = {
 
 // --- 2. DATA ---
 const PLANET_DATA = {
-  Sun: { diameter: "1,392,700 km", temp: "5,500°C", info: "The star at the center of our Solar System." },
-  Mercury: { diameter: "4,880 km", temp: "167°C", info: "Smallest planet, closest to the Sun." },
-  Venus: { diameter: "12,104 km", temp: "464°C", info: "Hottest planet due to greenhouse effect." },
-  Earth: { diameter: "12,742 km", temp: "15°C", info: "The only known planet to support life." },
-  Moon: { diameter: "3,474 km", temp: "-53°C", info: "Earth's only natural satellite." },
-  Mars: { diameter: "6,779 km", temp: "-65°C", info: "The Red Planet, home to Olympus Mons." },
-  Jupiter: { diameter: "139,820 km", temp: "-110°C", info: "Largest planet, a gas giant with storms." },
-  Saturn: { diameter: "116,460 km", temp: "-140°C", info: "Famous for its complex ring system." },
-  Uranus: { diameter: "50,724 km", temp: "-195°C", info: "Rotates on its side with vertical rings." },
-  Neptune: { diameter: "49,244 km", temp: "-200°C", info: "The windiest planet, deep blue ice giant." }
+  Sun: { name: "Sun", diameter: "1,392,700 km", day: "25 Days", temp: "5,500°C", info: "The star at the center of our Solar System. Its gravity holds the system together." },
+  Mercury: { name: "Mercury", diameter: "4,880 km", day: "59 days", temp: "167°C", info: "Smallest planet, closest to the Sun. It has a thin exosphere and extreme temperature swings." },
+  Venus: { name: "Venus", diameter: "12,104 km", day: "243 days", temp: "464°C", info: "Hottest planet due to a thick toxic atmosphere creating a runaway greenhouse effect." },
+  Earth: { name: "Earth", diameter: "12,742 km", day: "24 hours", temp: "15°C", info: "The only known planet to support life, with liquid water covering 70% of its surface." },
+  Moon: { name: "The Moon", diameter: "3,474 km", day: "27.3 days", temp: "-53°C", info: "Earth's only natural satellite. It stabilizes Earth's wobble and creates tides." },
+  Mars: { name: "Mars", diameter: "6,779 km", day: "24.6 hours", temp: "-65°C", info: "The 'Red Planet', home to Olympus Mons (largest volcano) and Valles Marineris (largest canyon)." },
+  Jupiter: { name: "Jupiter", diameter: "139,820 km", day: "9.9 hours", temp: "-110°C", info: "Largest planet, a gas giant. It has a Great Red Spot storm and over 90 moons." },
+  Saturn: { name: "Saturn", diameter: "116,460 km", day: "10.7 hours", temp: "-140°C", info: "Famous for its complex ring system made of ice and rock particles." },
+  Uranus: { name: "Uranus", diameter: "50,724 km", day: "17 hours", temp: "-195°C", info: "An ice giant that rotates on its side (98° tilt), likely due to a massive collision." },
+  Neptune: { name: "Neptune", diameter: "49,244 km", day: "16 hours", temp: "-200°C", info: "The windiest planet with supersonic winds. It was the first planet predicted by math." }
 };
 
-// --- 3. NEW TEXT LABEL COMPONENT ---
-function PlanetLabel({ name, offset }) {
-  const data = PLANET_DATA[name];
-  if (!data) return null;
+// --- 3. UI COMPONENT (Fixed Layout) ---
+function PlanetHUD({ focusedPlanet, onClose }) {
+  // Check window width safely
+  const isMobile = typeof window !== 'undefined' ? window.innerWidth < 768 : false;
 
   return (
-    <Html position={[0, -offset, 0]} center style={{ pointerEvents: 'none', zIndex: 100 }}>
-      <motion.div 
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: -20 }}
-        transition={{ duration: 0.5 }}
-        style={{ 
-          textAlign: "center", 
-          color: "white", 
-          width: "300px",
-          textShadow: "0 2px 4px rgba(0,0,0,0.9)" // Shadow for readability
-        }}
-      >
-        <h2 style={{ 
-          margin: "0 0 5px 0", 
-          fontSize: "24px", 
-          fontWeight: "bold", 
-          letterSpacing: "2px", 
-          textTransform: "uppercase" 
-        }}>
-          {name}
-        </h2>
-        <div style={{ fontSize: "14px", fontWeight: "500", color: "#ddd", marginBottom: "4px" }}>
-           {data.diameter} • {data.temp}
-        </div>
-        <p style={{ margin: 0, fontSize: "12px", lineHeight: "1.4", color: "#bbb", fontWeight: "400" }}>
-          {data.info}
-        </p>
-        <div style={{ marginTop: "10px", fontSize: "10px", color: "#888", fontStyle: "italic" }}>
-           ▼
-        </div>
-      </motion.div>
-    </Html>
+    <AnimatePresence>
+      {focusedPlanet && PLANET_DATA[focusedPlanet.name] && (
+        <motion.div
+          initial={{ y: isMobile ? 100 : 0, x: isMobile ? 0 : 100, opacity: 0 }}
+          animate={{ y: 0, x: 0, opacity: 1 }}
+          exit={{ y: isMobile ? 100 : 0, x: isMobile ? 0 : 100, opacity: 0 }}
+          transition={{ type: "spring", stiffness: 80, damping: 20 }}
+          style={{
+            position: "absolute",
+            // Mobile: Stick to bottom. Desktop: Stick to right.
+            bottom: isMobile ? "0" : "auto",
+            top: isMobile ? "auto" : "10%",
+            right: isMobile ? "0" : "20px",
+            left: isMobile ? "0" : "auto",
+            
+            // Sizing logic
+            width: isMobile ? "100%" : "320px",
+            maxHeight: isMobile ? "45vh" : "80vh", // Restrict height on mobile
+            
+            background: "rgba(15, 18, 25, 0.95)",
+            backdropFilter: "blur(12px)",
+            borderTop: "1px solid rgba(100, 200, 255, 0.3)",
+            borderLeft: isMobile ? "none" : "1px solid rgba(100, 200, 255, 0.3)",
+            border: !isMobile ? "1px solid rgba(100, 200, 255, 0.3)" : undefined,
+            borderRadius: isMobile ? "24px 24px 0 0" : "16px",
+            padding: "24px",
+            color: "white",
+            fontFamily: "'Inter', sans-serif",
+            zIndex: 2000,
+            boxShadow: "0 -10px 40px rgba(0,0,0,0.8)",
+            overflowY: "auto",
+            boxSizing: "border-box" // Prevents padding from expanding width
+          }}
+        >
+           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+            <h2 style={{ margin: 0, fontSize: "24px", fontWeight: "600", color: "#4db5ff", letterSpacing: "1px", textTransform: "uppercase" }}>
+              {PLANET_DATA[focusedPlanet.name].name}
+            </h2>
+            <button onClick={onClose} style={{ background: "transparent", border: "none", color: "#fff", fontSize: "24px", cursor: "pointer" }}>×</button>
+          </div>
+          
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px", marginBottom: "15px" }}>
+            <div>
+              <div style={{ fontSize: "10px", color: "#888" }}>DIAMETER</div>
+              <div style={{ fontSize: "13px" }}>{PLANET_DATA[focusedPlanet.name].diameter}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: "10px", color: "#888" }}>TEMP</div>
+              <div style={{ fontSize: "13px", color: "#ffaa55" }}>{PLANET_DATA[focusedPlanet.name].temp}</div>
+            </div>
+          </div>
+
+          <p style={{ margin: 0, fontSize: "13px", lineHeight: "1.5", color: "#ccc" }}>
+            {PLANET_DATA[focusedPlanet.name].info}
+          </p>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 }
 
@@ -84,16 +109,15 @@ function AsteroidBelt() {
   const count = 4000; 
   const dummy = useMemo(() => new THREE.Object3D(), []);
   
-  // FIX: Adjusted radius to 100-130. Jupiter is at 140. Mars is at 90.
-  // This guarantees a 10-unit safety buffer on both sides.
+  // FIX: Radius 100-125. Jupiter is at 140. Safe distance.
   const asteroids = useMemo(() => {
     const temp = [];
     for (let i = 0; i < count; i++) {
       const angle = Math.random() * Math.PI * 2;
-      const radius = 100 + Math.random() * 30; // Range: 100 to 130
+      const radius = 100 + Math.random() * 25; 
       const x = Math.cos(angle) * radius;
       const z = Math.sin(angle) * radius;
-      const y = (Math.random() - 0.5) * 15; 
+      const y = (Math.random() - 0.5) * 12; 
       
       // Irregular shapes
       const scaleX = Math.random() * 0.5 + 0.2;
@@ -135,6 +159,7 @@ function AsteroidBelt() {
 function SunGlow({ color, size }) {
   const meshRef = useRef();
   const { camera } = useThree();
+  
   const uniforms = useMemo(() => ({
     c: { value: 0.1 },
     p: { value: 4.0 },
@@ -184,11 +209,14 @@ function SunGlow({ color, size }) {
   );
 }
 
-function Sun({ onPlanetClick, isActive }) {
+function Sun({ onPlanetClick }) {
   const meshRef = useRef();
   const texture = useTexture(TEXTURES.sun);
   const size = 8;
-  useFrame(() => { if (meshRef.current) meshRef.current.rotation.y -= 0.002; });
+
+  useFrame(() => {
+    if (meshRef.current) meshRef.current.rotation.y -= 0.002;
+  });
 
   const handleClick = (e) => {
     e.stopPropagation();
@@ -203,9 +231,6 @@ function Sun({ onPlanetClick, isActive }) {
       </mesh>
       <SunGlow color="#FF8C00" size={size} />
       <pointLight intensity={5.0} distance={5000} decay={0} color="#ffddaa" />
-      
-      {/* New Text Label */}
-      {isActive && <PlanetLabel name="Sun" offset={size + 3} />}
     </group>
   );
 }
@@ -236,7 +261,7 @@ function Hitbox({ size, onClick }) {
 
 // --- 5. PLANET COMPONENTS ---
 
-function Moon({ size, distance, orbitSpeed, onPlanetClick, isActive }) {
+function Moon({ size, distance, orbitSpeed, onPlanetClick }) {
   const moonRef = useRef();
   const texture = useTexture(TEXTURES.moon);
   const angleRef = useRef(Math.random() * Math.PI * 2);
@@ -268,7 +293,6 @@ function Moon({ size, distance, orbitSpeed, onPlanetClick, isActive }) {
           <meshStandardMaterial map={texture} metalness={0.1} roughness={0.8} />
         </mesh>
         <Hitbox size={size} onClick={handleClick} />
-        {isActive && <PlanetLabel name="Moon" offset={size + 2} />}
       </group>
     </group>
   );
@@ -324,7 +348,7 @@ function PlanetRing({ textureKey, size, isVertical }) {
 
 function Planet({ 
   name, textureKey, distance, startAngle, orbitSpeed, size, 
-  onPlanetClick, isActive, hasAtmosphere, hasClouds, hasRings, 
+  onPlanetClick, hasAtmosphere, hasClouds, hasRings, 
   ringTextureKey, isVerticalRing, tilt = 0, children 
 }) {
   const orbitGroupRef = useRef();
@@ -369,14 +393,12 @@ function Planet({
         </group>
         {children}
         <Hitbox size={size} onClick={handleClick} />
-        {/* NEW: Text Label appears below planet */}
-        {isActive && <PlanetLabel name={name} offset={size + 4} />}
       </group>
     </group>
   );
 }
 
-// --- 6. CAMERA CONTROLLER ---
+// --- 6. CAMERA CONTROLLER (FIXED) ---
 function CameraController({ focusedPlanet, setFocusedPlanet }) {
   const { camera, controls } = useThree();
   const isTransitioning = useRef(false);
@@ -396,10 +418,12 @@ function CameraController({ focusedPlanet, setFocusedPlanet }) {
     return () => window.removeEventListener('reset-camera', handleReset);
   }, [setFocusedPlanet]);
 
+  // PRIORITY 1: Run after updates to fix jitter
   useFrame((state, delta) => {
     if (!controls) return;
 
     if (isResetting.current && !focusedPlanet) {
+       // FIX: Fly backwards logic to avoid sun collision
        const currentPos = camera.position.clone();
        const safeDist = 250;
        const targetDist = Math.max(currentPos.length(), safeDist);
@@ -420,9 +444,7 @@ function CameraController({ focusedPlanet, setFocusedPlanet }) {
 
       const sunPos = new THREE.Vector3(0,0,0);
       const directionToSun = new THREE.Vector3().subVectors(sunPos, targetPos).normalize();
-      
-      // Adjusted distance so text fits on screen (size * 5 + 20)
-      const dist = focusedPlanet.name === "Sun" ? focusedPlanet.size * 4 : focusedPlanet.size * 5 + 20;
+      const dist = focusedPlanet.name === "Sun" ? focusedPlanet.size * 4 : focusedPlanet.size * 5 + 15;
       const desiredCamPos = targetPos.clone().add(directionToSun.multiplyScalar(dist));
       desiredCamPos.y += focusedPlanet.size * 2; 
 
@@ -435,8 +457,11 @@ function CameraController({ focusedPlanet, setFocusedPlanet }) {
           previousTargetPos.current.copy(targetPos);
         }
       } else {
+        // LOCKED MODE: Move camera by delta to stick to planet
         const deltaMove = new THREE.Vector3().subVectors(targetPos, previousTargetPos.current);
         camera.position.add(deltaMove);
+        
+        // Snap pivot to center (Fixes "Not Centered" bug)
         controls.target.copy(targetPos); 
         previousTargetPos.current.copy(targetPos);
       }
@@ -488,29 +513,28 @@ export default function App() {
         </button>
       )}
 
-      <Canvas camera={{ position: [0, 150, 200], fov: 45, far: 20000 }} dpr={[1, 2]} shadows>
+      <PlanetHUD focusedPlanet={focusedPlanet} onClose={handleReturn} />
+
+      <Canvas camera={{ position: [0, 150, 250], fov: 45, far: 20000 }} dpr={[1, 2]} shadows>
         <ambientLight intensity={0.03} /> 
         <AnimatedStars />
         
         <Suspense fallback={null}>
-          <Sun onPlanetClick={handlePlanetClick} isActive={focusedPlanet?.name === "Sun"} />
+          <Sun onPlanetClick={handlePlanetClick} />
           
-          <Planet name="Mercury" textureKey="mercury" distance={30} startAngle={0} orbitSpeed={1.5} size={1.0} onPlanetClick={handlePlanetClick} isActive={focusedPlanet?.name === "Mercury"} />
-          <Planet name="Venus" textureKey="venus" distance={45} startAngle={1} orbitSpeed={1.1} size={1.8} onPlanetClick={handlePlanetClick} isActive={focusedPlanet?.name === "Venus"} />
+          <Planet name="Mercury" textureKey="mercury" distance={30} startAngle={0} orbitSpeed={1.5} size={1.0} onPlanetClick={handlePlanetClick} />
+          <Planet name="Venus" textureKey="venus" distance={45} startAngle={1} orbitSpeed={1.1} size={1.8} onPlanetClick={handlePlanetClick} />
           
-          <Planet name="Earth" textureKey="earth" distance={65} startAngle={2} orbitSpeed={0.8} size={2.0} hasAtmosphere={true} hasClouds={true} onPlanetClick={handlePlanetClick} isActive={focusedPlanet?.name === "Earth"}>
-             <Moon size={0.5} distance={4} orbitSpeed={3.5} onPlanetClick={handlePlanetClick} isActive={focusedPlanet?.name === "Moon"} />
+          <Planet name="Earth" textureKey="earth" distance={65} startAngle={2} orbitSpeed={0.8} size={2.0} hasAtmosphere={true} hasClouds={true} onPlanetClick={handlePlanetClick}>
+             <Moon size={0.5} distance={4} orbitSpeed={3.5} onPlanetClick={handlePlanetClick} />
           </Planet>
 
-          <Planet name="Mars" textureKey="mars" distance={90} startAngle={3.5} orbitSpeed={0.6} size={1.4} onPlanetClick={handlePlanetClick} isActive={focusedPlanet?.name === "Mars"} />
-          
-          {/* Fixed Asteroids */}
+          <Planet name="Mars" textureKey="mars" distance={90} startAngle={3.5} orbitSpeed={0.6} size={1.4} onPlanetClick={handlePlanetClick} />
           <AsteroidBelt />
-
-          <Planet name="Jupiter" textureKey="jupiter" distance={140} startAngle={4.2} orbitSpeed={0.3} size={5.0} onPlanetClick={handlePlanetClick} isActive={focusedPlanet?.name === "Jupiter"} />
-          <Planet name="Saturn" textureKey="saturn" distance={190} startAngle={5.5} orbitSpeed={0.2} size={4.2} hasRings={true} ringTextureKey="saturnRing" tilt={0.5} onPlanetClick={handlePlanetClick} isActive={focusedPlanet?.name === "Saturn"} />
-          <Planet name="Uranus" textureKey="uranus" distance={240} startAngle={0.5} orbitSpeed={0.1} size={2.8} hasRings={true} ringTextureKey="uranus" isVerticalRing={true} tilt={0} onPlanetClick={handlePlanetClick} isActive={focusedPlanet?.name === "Uranus"} />
-          <Planet name="Neptune" textureKey="neptune" distance={290} startAngle={2} orbitSpeed={0.08} size={2.8} onPlanetClick={handlePlanetClick} isActive={focusedPlanet?.name === "Neptune"} />
+          <Planet name="Jupiter" textureKey="jupiter" distance={140} startAngle={4.2} orbitSpeed={0.3} size={5.0} onPlanetClick={handlePlanetClick} />
+          <Planet name="Saturn" textureKey="saturn" distance={190} startAngle={5.5} orbitSpeed={0.2} size={4.2} hasRings={true} ringTextureKey="saturnRing" tilt={0.5} onPlanetClick={handlePlanetClick} />
+          <Planet name="Uranus" textureKey="uranus" distance={240} startAngle={0.5} orbitSpeed={0.1} size={2.8} hasRings={true} ringTextureKey="uranus" isVerticalRing={true} tilt={0} onPlanetClick={handlePlanetClick} />
+          <Planet name="Neptune" textureKey="neptune" distance={290} startAngle={2} orbitSpeed={0.08} size={2.8} onPlanetClick={handlePlanetClick} />
         </Suspense>
 
         <OrbitControls enablePan={false} minDistance={5} maxDistance={1200} enableDamping={true} dampingFactor={0.05} rotateSpeed={0.6} makeDefault />
@@ -520,5 +544,3 @@ export default function App() {
     </div>
   );
 }
-
-
