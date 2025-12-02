@@ -1,17 +1,16 @@
 import React, { useRef, useState, useEffect, useMemo, Suspense } from "react";
 import { Canvas, useFrame, useThree, extend } from "@react-three/fiber";
-import { OrbitControls, Stars, Html, useTexture, shaderMaterial } from "@react-three/drei";
+import { OrbitControls, Stars, useTexture, shaderMaterial } from "@react-three/drei";
 import * as THREE from "three";
 import { motion, AnimatePresence } from "framer-motion";
 
 // ------------------------------------------------------------------
-// 1. ADVANCED SHADERS (The "Pro" Stuff)
+// 1. ADVANCED SHADERS
 // ------------------------------------------------------------------
 
-// A. Sun Corona Shader (Animated plasma effect)
 const SunMaterial = shaderMaterial(
-  { time: 0, color: new THREE.Color(1.2, 0.6, 0.1) }, // High dynamic range color
-  // Vertex Shader
+  { time: 0, color: new THREE.Color(1.2, 0.6, 0.1) },
+  // Vertex
   `
     varying vec2 vUv;
     varying vec3 vNormal;
@@ -21,14 +20,13 @@ const SunMaterial = shaderMaterial(
       gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
     }
   `,
-  // Fragment Shader
+  // Fragment
   `
     uniform float time;
     uniform vec3 color;
     varying vec2 vUv;
     varying vec3 vNormal;
 
-    // Simplex noise function (simplified)
     float noise(vec3 p) {
       vec3 i = floor(p);
       vec3 f = fract(p);
@@ -46,14 +44,12 @@ const SunMaterial = shaderMaterial(
     void main() {
       float brightness = noise(vNormal * 6.0 + time * 0.5);
       vec3 finalColor = color * (0.8 + brightness * 0.4);
-      // Edge glow (Fresnel)
       float fresnel = pow(1.0 - dot(vNormal, vec3(0.0, 0.0, 1.0)), 2.0);
       gl_FragColor = vec4(finalColor + vec3(fresnel) * 0.5, 1.0);
     }
   `
 );
 
-// B. Atmosphere Shader (Blue halo for Earth)
 const AtmosphereMaterial = shaderMaterial(
   { color: new THREE.Color(0.3, 0.6, 1.0), intensity: 1.0 },
   `
@@ -85,7 +81,7 @@ const getPath = (file) => (process.env.PUBLIC_URL ? `${process.env.PUBLIC_URL}/t
 const SOLAR_SYSTEM = [
   {
     name: "Mercury",
-    diameter: 1, // Scaled Size
+    diameter: 1,
     distance: 25,
     speed: 0.04,
     color: "#A5A5A5",
@@ -181,10 +177,9 @@ const SOLAR_SYSTEM = [
 ];
 
 // ------------------------------------------------------------------
-// 3. HELPER COMPONENTS
+// 3. HELPER COMPONENTS (FIXED FOR HOOKS)
 // ------------------------------------------------------------------
 
-// A safe texture loader that falls back to color if image fails
 function PlanetMesh({ textureUrl, color, args, ...props }) {
   const texture = useTexture(textureUrl);
   return (
@@ -199,12 +194,36 @@ function PlanetMesh({ textureUrl, color, args, ...props }) {
   );
 }
 
-// Fallback component if textures fail completely
 function FallbackMesh({ color, args, ...props }) {
   return (
     <mesh {...props}>
       <sphereGeometry args={args} />
       <meshStandardMaterial color={color} roughness={0.5} />
+    </mesh>
+  );
+}
+
+// NEW: Separated Clouds component to safely use Hooks
+function Clouds({ textureUrl, diameter }) {
+  const texture = useTexture(textureUrl);
+  const ref = useRef();
+  useFrame(() => { if (ref.current) ref.current.rotation.y += 0.007; });
+  
+  return (
+    <mesh ref={ref} scale={[1.01, 1.01, 1.01]}>
+      <sphereGeometry args={[diameter, 64, 64]} />
+      <meshStandardMaterial map={texture} transparent opacity={0.8} blending={THREE.AdditiveBlending} side={THREE.DoubleSide} depthWrite={false}/>
+    </mesh>
+  );
+}
+
+// NEW: Separated Rings component to safely use Hooks
+function PlanetRings({ textureUrl, inner, outer }) {
+  const texture = useTexture(textureUrl);
+  return (
+    <mesh rotation={[-Math.PI/2, 0, 0]}>
+        <ringGeometry args={[inner, outer, 64]} />
+        <meshStandardMaterial map={texture} transparent opacity={0.8} side={THREE.DoubleSide} />
     </mesh>
   );
 }
@@ -226,10 +245,8 @@ function Sun({ onClick }) {
     <group onClick={(e) => { e.stopPropagation(); onClick("Sun"); }}>
       <mesh>
         <sphereGeometry args={[12, 64, 64]} />
-        {/* Using our custom shader */}
         <sunMaterial ref={materialRef} transparent />
       </mesh>
-      {/* Glow Halo */}
       <mesh scale={[1.2, 1.2, 1.2]}>
         <sphereGeometry args={[12, 32, 32]} />
         <meshBasicMaterial color="#FF5500" transparent opacity={0.1} side={THREE.BackSide} />
@@ -244,11 +261,10 @@ function AsteroidBelt() {
   const count = 4000;
   const dummy = useMemo(() => new THREE.Object3D(), []);
   
-  // Generate random asteroid data once
   const asteroids = useMemo(() => {
     return new Array(count).fill(0).map(() => ({
       angle: Math.random() * Math.PI * 2,
-      radius: 95 + Math.random() * 25, // Between Mars (80) and Jupiter (130)
+      radius: 95 + Math.random() * 25,
       y: (Math.random() - 0.5) * 10,
       scale: Math.random() * 0.4 + 0.05,
       rotationSpeed: Math.random() * 0.02
@@ -257,19 +273,14 @@ function AsteroidBelt() {
 
   useFrame((state) => {
     if (!meshRef.current) return;
-    
-    // Animate asteroids
+    const time = state.clock.elapsedTime * 0.05;
     asteroids.forEach((data, i) => {
-      // Simple rotation of the belt
-      const time = state.clock.elapsedTime * 0.05;
-      const angle = data.angle + time * (100 / data.radius); // Inner asteroids faster
-      
+      const angle = data.angle + time * (100 / data.radius);
       dummy.position.set(
         Math.cos(angle) * data.radius,
-        data.y + Math.sin(time + i) * 2, // Slight wave motion
+        data.y + Math.sin(time + i) * 2,
         Math.sin(angle) * data.radius
       );
-      
       dummy.rotation.set(time * data.rotationSpeed, time * data.rotationSpeed, time);
       dummy.scale.setScalar(data.scale);
       dummy.updateMatrix();
@@ -289,9 +300,7 @@ function AsteroidBelt() {
 function OrbitSystem({ planet, timeScale, onFocus, isSelected }) {
   const groupRef = useRef();
   const planetRef = useRef();
-  const cloudsRef = useRef();
   
-  // Random start position
   const startAngle = useMemo(() => Math.random() * Math.PI * 2, []);
 
   useFrame((state) => {
@@ -308,16 +317,11 @@ function OrbitSystem({ planet, timeScale, onFocus, isSelected }) {
     if (planetRef.current) {
       planetRef.current.rotation.y += 0.005;
     }
-    
-    // 3. Clouds Rotation (Earth only)
-    if (cloudsRef.current) {
-      cloudsRef.current.rotation.y += 0.007;
-    }
   });
 
   return (
     <group>
-      {/* Orbit Path (Visual Line) */}
+      {/* Orbit Path */}
       <mesh rotation={[-Math.PI / 2, 0, 0]}>
         <ringGeometry args={[planet.distance - 0.2, planet.distance + 0.2, 128]} />
         <meshBasicMaterial color={isSelected ? "#4db5ff" : "#333"} transparent opacity={isSelected ? 0.6 : 0.2} side={THREE.DoubleSide} />
@@ -327,7 +331,6 @@ function OrbitSystem({ planet, timeScale, onFocus, isSelected }) {
       <group ref={groupRef}>
         <group rotation={[planet.tilt || 0, 0, 0]} onClick={(e) => { e.stopPropagation(); onFocus(planet.name); }}>
           
-          {/* Planet Body */}
           <Suspense fallback={<FallbackMesh color={planet.color} args={[planet.diameter, 32, 32]} />}>
              <PlanetMesh 
                 ref={planetRef}
@@ -336,15 +339,12 @@ function OrbitSystem({ planet, timeScale, onFocus, isSelected }) {
                 args={[planet.diameter, 64, 64]} 
              />
              
-             {/* Clouds (Earth) */}
+             {/* Safe Clouds Component */}
              {planet.clouds && (
-               <mesh ref={cloudsRef} scale={[1.01, 1.01, 1.01]}>
-                 <sphereGeometry args={[planet.diameter, 64, 64]} />
-                 <meshStandardMaterial map={useTexture(planet.clouds)} transparent opacity={0.8} blending={THREE.AdditiveBlending} side={THREE.DoubleSide} depthWrite={false}/>
-               </mesh>
+               <Clouds textureUrl={planet.clouds} diameter={planet.diameter} />
              )}
 
-             {/* Atmosphere Glow (Earth/Venus) */}
+             {/* Atmosphere Glow */}
              {planet.atmosphere && (
                 <mesh scale={[1.2, 1.2, 1.2]}>
                   <sphereGeometry args={[planet.diameter, 32, 32]} />
@@ -352,12 +352,9 @@ function OrbitSystem({ planet, timeScale, onFocus, isSelected }) {
                 </mesh>
              )}
 
-             {/* Rings (Saturn) */}
+             {/* Safe Rings Component */}
              {planet.ring && (
-                <mesh rotation={[-Math.PI/2, 0, 0]}>
-                    <ringGeometry args={[planet.ring.inner, planet.ring.outer, 64]} />
-                    <meshStandardMaterial map={useTexture(planet.ring.texture)} transparent opacity={0.8} side={THREE.DoubleSide} />
-                </mesh>
+                <PlanetRings textureUrl={planet.ring.texture} inner={planet.ring.inner} outer={planet.ring.outer} />
              )}
           </Suspense>
 
@@ -386,7 +383,7 @@ function Moon({ data, timeScale }) {
 
     useFrame((state) => {
         const t = state.clock.getElapsedTime() * timeScale;
-        const angle = startAngle + t * data.speed * 5; // Moons orbit faster
+        const angle = startAngle + t * data.speed * 5; 
         if(moonRef.current) {
             moonRef.current.position.x = Math.sin(angle) * data.distance;
             moonRef.current.position.z = Math.cos(angle) * data.distance;
@@ -412,38 +409,8 @@ function Moon({ data, timeScale }) {
 // ------------------------------------------------------------------
 
 function CameraManager({ targetName, sceneRef }) {
-  const { camera, controls } = useThree();
-  const vec = new THREE.Vector3();
-  const isFlying = useRef(false);
+  const { controls } = useThree();
 
-  useFrame((state, delta) => {
-    if (!targetName || !sceneRef.current) return;
-    
-    let targetObj = null;
-
-    if (targetName === "Sun") {
-        // Special case for Sun
-        vec.set(0, 0, 0);
-        targetObj = { position: vec, size: 20 };
-    } else {
-        // Find planet in scene graph
-        // This is a simplified search. In production, use a proper reference map.
-        // We look for objects by checking their user data or iterating, 
-        // but here we rely on the fact that orbit groups calculate position every frame.
-        // NOTE: For this code, we will calculate expected position mathematically to ensure smoothness
-        const planetData = SOLAR_SYSTEM.find(p => p.name === targetName);
-        if (planetData) {
-            const time = state.clock.elapsedTime * (window.timeScale || 1); 
-            // We need to access the REAL position from the actual mesh if possible
-            // But calculating it is safer for the camera than reading a moving target sometimes
-            // Let's rely on OrbitControls to update target, and we lerp the camera
-        }
-    }
-  });
-
-  // A simpler approach for this demo:
-  // When target changes, we don't continuously lock (which causes motion sickness),
-  // we just drift near it.
   useEffect(() => {
      if(targetName === "Sun") {
          controls.minDistance = 25;
@@ -456,7 +423,7 @@ function CameraManager({ targetName, sceneRef }) {
 }
 
 // ------------------------------------------------------------------
-// 6. UI OVERLAY (The "Mission Control")
+// 6. UI OVERLAY
 // ------------------------------------------------------------------
 
 function Overlay({ currentPlanet, onSelect, timeScale, setTimeScale }) {
@@ -465,13 +432,11 @@ function Overlay({ currentPlanet, onSelect, timeScale, setTimeScale }) {
     return (
         <div style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", pointerEvents: "none" }}>
             
-            {/* Header */}
             <div style={{ position: "absolute", top: 20, left: 20, pointerEvents: "auto" }}>
                 <h1 style={{ margin: 0, color: "white", fontSize: "1.5rem", letterSpacing: "4px" }}>SOLARIS <span style={{color:"#4db5ff", fontSize:"0.8rem"}}>PRO</span></h1>
                 <p style={{ margin: 0, color: "#888", fontSize: "0.8rem" }}>Interactive System Simulation</p>
             </div>
 
-            {/* Planet Selector Sidebar */}
             <div style={{ 
                 position: "absolute", top: "20%", left: 20, display: "flex", flexDirection: "column", gap: "10px", pointerEvents: "auto" 
             }}>
@@ -502,7 +467,6 @@ function Overlay({ currentPlanet, onSelect, timeScale, setTimeScale }) {
                 ))}
             </div>
 
-            {/* Speed Control */}
             <div style={{ position: "absolute", top: 20, right: 20, pointerEvents: "auto", background: "rgba(0,0,0,0.8)", padding: "10px", borderRadius: "10px", border: "1px solid #333" }}>
                 <div style={{ color: "#aaa", fontSize: "12px", marginBottom: "5px" }}>SIMULATION SPEED</div>
                 <input 
@@ -513,7 +477,6 @@ function Overlay({ currentPlanet, onSelect, timeScale, setTimeScale }) {
                 <div style={{ color: "white", textAlign: "right", fontSize: "12px" }}>{timeScale.toFixed(1)}x</div>
             </div>
 
-            {/* Info Panel */}
             <AnimatePresence>
                 {planetInfo && (
                     <motion.div
@@ -549,7 +512,7 @@ export default function App() {
   const [timeScale, setTimeScale] = useState(1.0);
   const sceneRef = useRef();
 
-  // Expose timescale to window for deep component access without context (simple hack for this file)
+  // Expose timescale to window for deep access
   useEffect(() => { window.timeScale = timeScale; }, [timeScale]);
 
   return (
@@ -558,11 +521,8 @@ export default function App() {
       <Canvas camera={{ position: [0, 100, 250], fov: 45, far: 10000 }} shadows dpr={[1, 2]}>
         <color attach="background" args={['#050505']} />
         
-        {/* Lights */}
         <ambientLight intensity={0.15} />
-        {/* Sun light is inside Sun component */}
         
-        {/* Background */}
         <Stars radius={300} depth={50} count={6000} factor={4} saturation={0} fade speed={1} />
         
         <Suspense fallback={null}>
