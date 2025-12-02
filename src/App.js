@@ -24,9 +24,7 @@ class ErrorBoundary extends React.Component {
           </div>
           <p style={{ fontSize: '0.9em', color: '#aaa' }}>
             <strong>How to fix:</strong><br/>
-            1. Check "public/textures" folder.<br/>
-            2. Ensure filenames match EXACTLY (case-sensitive!).<br/>
-            3. Example: "Sun.jpg" is not "sun.jpg".
+            Check "public/textures" folder and ensure filenames match EXACTLY (case-sensitive!).
           </p>
           <button onClick={() => window.location.reload()} style={{ background: '#ff4444', color: 'white', border: 'none', padding: '10px 20px', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' }}>Try Reloading</button>
         </div>
@@ -94,7 +92,7 @@ function Sun({ onClick }) {
   );
 }
 
-function OrbitSystem({ planet, timeScale, onFocus, isSelected }) {
+function OrbitSystem({ planet, timeScale, onFocus }) {
   const groupRef = useRef();
   const planetRef = useRef();
   const startAngle = useMemo(() => Math.random() * Math.PI * 2, []);
@@ -110,7 +108,9 @@ function OrbitSystem({ planet, timeScale, onFocus, isSelected }) {
 
   return (
     <group>
-      <mesh rotation={[-Math.PI / 2, 0, 0]}><ringGeometry args={[planet.distance - 0.2, planet.distance + 0.2, 64]} /><meshBasicMaterial color={isSelected ? "#4db5ff" : "#333"} transparent opacity={isSelected ? 0.6 : 0.2} side={THREE.DoubleSide} /></mesh>
+      {/* Orbit Path - Fixed to grey (removed blue highlight logic) */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]}><ringGeometry args={[planet.distance - 0.2, planet.distance + 0.2, 64]} /><meshBasicMaterial color="#333" transparent opacity={0.2} side={THREE.DoubleSide} /></mesh>
+      
       <group ref={groupRef}>
         <group rotation={[planet.tilt || 0, 0, 0]} onClick={(e) => { e.stopPropagation(); onFocus(planet.name); }}>
           <Suspense fallback={null}>
@@ -122,7 +122,8 @@ function OrbitSystem({ planet, timeScale, onFocus, isSelected }) {
           {planet.moons && planet.moons.map((moon, i) => (
              <Moon key={i} data={moon} timeScale={timeScale} />
           ))}
-          {isSelected && <mesh><sphereGeometry args={[planet.diameter * 1.5, 16, 16]} /><meshBasicMaterial color="#4db5ff" wireframe transparent opacity={0.2} /></mesh>}
+          
+          {/* REMOVED THE WIREFRAME MESH HERE */}
         </group>
       </group>
     </group>
