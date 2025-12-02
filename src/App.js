@@ -1,651 +1,152 @@
-// App.jsx
-import React, { useRef, useState, useEffect, Suspense, useMemo } from "react";
-import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { OrbitControls, Stars, useTexture, Loader } from "@react-three/drei";
+import React, { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
-import { motion, AnimatePresence } from "framer-motion";
+import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
+import "./App.css";
 
-// --- 1. ASSETS ---
-const getPath = (file) => {
-  const base = process.env.PUBLIC_URL || "";
-  return `${base}/textures/${file}`;
-};
-
-const TEXTURES = {
-  sun: getPath("sun.jpg"),
-  mercury: getPath("2k_mercury.jpg"),
-  venus: getPath("2k_venus_surface.jpg"),
-  earth: getPath("earth_atmos_2048.jpg"),
-  earthClouds: getPath("2k_earth_clouds.jpg"),
-  mars: getPath("2k_mars.jpg"),
-  jupiter: getPath("2k_jupiter.jpg"),
-  saturn: getPath("2k_saturn.jpg"),
-  saturnRing: getPath("2k_saturn_ring_alpha.png"),
-  uranus: getPath("2k_uranus.jpg"),
-  neptune: getPath("2k_neptune.jpg"),
-  moon: getPath("2k_moon.jpg"),
-};
-
-// --- 2. DATA ---
-const PLANET_DATA = {
-  Sun: {
-    name: "Sun",
-    diameter: "1,392,700 km",
-    day: "25 Days",
-    temp: "5,500°C",
-    info: "The star at the center of our Solar System. Its gravity holds the system together.",
-  },
-  Mercury: {
-    name: "Mercury",
-    diameter: "4,880 km",
-    day: "59 days",
-    temp: "167°C",
-    info: "Smallest planet, closest to the Sun. It has a thin exosphere and extreme temperature swings.",
-  },
-  Venus: {
-    name: "Venus",
-    diameter: "12,104 km",
-    day: "243 days",
-    temp: "464°C",
-    info: "Hottest planet due to a thick toxic atmosphere creating a runaway greenhouse effect.",
-  },
-  Earth: {
-    name: "Earth",
-    diameter: "12,742 km",
-    day: "24 hours",
-    temp: "15°C",
-    info: "The only known planet to support life, with liquid water covering 70% of its surface.",
-  },
-  Moon: {
-    name: "The Moon",
-    diameter: "3,474 km",
-    day: "27.3 days",
-    temp: "-53°C",
-    info: "Earth's only natural satellite. It stabilizes Earth's wobble and creates tides.",
-  },
-  Mars: {
-    name: "Mars",
-    diameter: "6,779 km",
-    day: "24.6 hours",
-    temp: "-65°C",
-    info: "The 'Red Planet', home to Olympus Mons (largest volcano) and Valles Marineris (largest canyon).",
-  },
-  Jupiter: {
-    name: "Jupiter",
-    diameter: "139,820 km",
-    day: "9.9 hours",
-    temp: "-110°C",
-    info: "Largest planet, a gas giant. It has a Great Red Spot storm and over 90 moons.",
-  },
-  Saturn: {
-    name: "Saturn",
-    diameter: "116,460 km",
-    day: "10.7 hours",
-    temp: "-140°C",
-    info: "Famous for its complex ring system made of ice and rock particles.",
-  },
-  Uranus: {
-    name: "Uranus",
-    diameter: "50,724 km",
-    day: "17 hours",
-    temp: "-195°C",
-    info: "An ice giant that rotates on its side (98° tilt), likely due to a massive collision.",
-  },
-  Neptune: {
-    name: "Neptune",
-    diameter: "49,244 km",
-    day: "16 hours",
-    temp: "-200°C",
-    info: "The windiest planet with supersonic winds. It was the first planet predicted by math.",
-  },
-};
-
-// --- 3. UI COMPONENT ---
-function PlanetHUD({ focusedPlanet, onClose }) {
-  const isMobile = typeof window !== "undefined" ? window.innerWidth < 768 : false;
-  if (!focusedPlanet) return null;
-  const data = PLANET_DATA[focusedPlanet.name];
-
-  return (
-    <AnimatePresence>
-      {data && (
-        <motion.div
-          initial={{ y: isMobile ? 100 : 0, x: isMobile ? 0 : 100, opacity: 0 }}
-          animate={{ y: 0, x: 0, opacity: 1 }}
-          exit={{ y: isMobile ? 100 : 0, x: isMobile ? 0 : 100, opacity: 0 }}
-          transition={{ type: "spring", stiffness: 80, damping: 20 }}
-          style={{
-            position: "absolute",
-            bottom: isMobile ? "0" : "auto",
-            top: isMobile ? "auto" : "15%",
-            right: isMobile ? "0" : "20px",
-            left: isMobile ? "0" : "auto",
-            width: isMobile ? "100%" : "300px",
-            maxHeight: "60vh",
-            background: "rgba(12, 14, 24, 0.9)",
-            backdropFilter: "blur(16px)",
-            WebkitBackdropFilter: "blur(16px)",
-            borderTop: "1px solid rgba(100, 200, 255, 0.3)",
-            borderLeft: isMobile ? "none" : "1px solid rgba(100, 200, 255, 0.3)",
-            borderRadius: isMobile ? "20px 20px 0 0" : "16px",
-            padding: "24px",
-            color: "white",
-            fontFamily: "'Inter', sans-serif",
-            zIndex: 2000,
-            boxShadow: "0 -10px 40px rgba(0,0,0,0.8)",
-            overflowY: "auto",
-            boxSizing: "border-box",
-          }}
-        >
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
-            <h2 style={{ margin: 0, fontSize: "24px", fontWeight: "600", color: "#4db5ff", letterSpacing: "1px", textTransform: "uppercase" }}>
-              {data.name}
-            </h2>
-            <button onClick={onClose} style={{ background: "transparent", border: "none", color: "#fff", fontSize: "24px", cursor: "pointer" }}>
-              ×
-            </button>
-          </div>
-
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px", marginBottom: "15px" }}>
-            <div>
-              <div style={{ fontSize: "10px", color: "#888" }}>DIAMETER</div>
-              <div style={{ fontSize: "13px" }}>{data.diameter}</div>
-            </div>
-            <div>
-              <div style={{ fontSize: "10px", color: "#888" }}>TEMP</div>
-              <div style={{ fontSize: "13px", color: "#ffaa55" }}>{data.temp}</div>
-            </div>
-          </div>
-
-          <p style={{ margin: 0, fontSize: "13px", lineHeight: "1.5", color: "#ccc" }}>{data.info}</p>
-        </motion.div>
-      )}
-    </AnimatePresence>
-  );
-}
-
-// --- 4. VISUAL COMPONENTS ---
-function AsteroidBelt() {
-  const asteroidRef = useRef();
-  const count = 2000;
-  const dummy = useMemo(() => new THREE.Object3D(), []);
-  const asteroids = useMemo(() => {
-    const temp = [];
-    for (let i = 0; i < count; i++) {
-      const angle = Math.random() * Math.PI * 2;
-      const radius = 90 + Math.random() * 40;
-      const x = Math.cos(angle) * radius;
-      const z = Math.sin(angle) * radius;
-      const y = (Math.random() - 0.5) * 15;
-
-      const scaleX = Math.random() * 0.5 + 0.2;
-      const scaleY = Math.random() * 0.5 + 0.2;
-      const scaleZ = Math.random() * 0.5 + 0.2;
-
-      temp.push({ x, y, z, scaleX, scaleY, scaleZ, rotation: Math.random() * Math.PI });
-    }
-    return temp;
-  }, [count]);
+function App() {
+  const mountRef = useRef(null);
+  const [selectedPlanet, setSelectedPlanet] = useState(null);
 
   useEffect(() => {
-    if (asteroidRef.current) {
-      asteroids.forEach((data, i) => {
-        dummy.position.set(data.x, data.y, data.z);
-        dummy.rotation.set(data.rotation, data.rotation, data.rotation);
-        dummy.scale.set(data.scaleX, data.scaleY, data.scaleZ);
-        dummy.updateMatrix();
-        asteroidRef.current.setMatrixAt(i, dummy.matrix);
+    const mount = mountRef.current;
+
+    // === Scene Setup ===
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(
+      50,
+      mount.clientWidth / mount.clientHeight,
+      1,
+      5000
+    );
+
+    camera.position.set(0, 20, 80);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(mount.clientWidth, mount.clientHeight);
+    renderer.setPixelRatio(window.devicePixelRatio);
+    mount.appendChild(renderer.domElement);
+
+    // === Orbit Controls (Mobile Friendly) ===
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+
+    // === Light ===
+    const light = new THREE.PointLight(0xffffff, 3);
+    light.position.set(0, 0, 0);
+    scene.add(light);
+
+    // === Texture Loader ===
+    const loader = new THREE.TextureLoader();
+
+    // Function to load planet
+    const createPlanet = (file, size, distance, speed, name, extra = null) => {
+      const geo = new THREE.SphereGeometry(size, 64, 64);
+      const mat = new THREE.MeshStandardMaterial({
+        map: loader.load(`/textures/${file}`)
       });
-      asteroidRef.current.instanceMatrix.needsUpdate = true;
-    }
-  }, [asteroids, dummy]);
+      const mesh = new THREE.Mesh(geo, mat);
 
-  useFrame(() => {
-    if (asteroidRef.current) {
-      asteroidRef.current.rotation.y += 0.0003;
-    }
-  });
+      // Orbit group for movement
+      const group = new THREE.Group();
+      group.add(mesh);
+      mesh.position.x = distance;
 
-  return (
-    <instancedMesh ref={asteroidRef} args={[null, null, count]} frustumCulled={false}>
-      <dodecahedronGeometry args={[0.18, 0]} />
-      <meshStandardMaterial color="#888888" roughness={0.9} metalness={0.05} />
-    </instancedMesh>
-  );
-}
-
-function SunGlow({ color, size }) {
-  const meshRef = useRef();
-  const { camera } = useThree();
-
-  const uniforms = useMemo(
-    () => ({
-      c: { value: 0.1 },
-      p: { value: 4.0 },
-      glowColor: { value: new THREE.Color(color) },
-      viewVector: { value: new THREE.Vector3() },
-    }),
-    [color]
-  );
-
-  useFrame(() => {
-    if (meshRef.current) {
-      meshRef.current.material.uniforms.viewVector.value.copy(camera.position).normalize();
-    }
-  });
-
-  return (
-    <mesh ref={meshRef}>
-      <sphereGeometry args={[size * 1.2, 64, 64]} />
-      <shaderMaterial
-        attach="material"
-        args={[
-          {
-            uniforms: uniforms,
-            vertexShader: `
-              uniform vec3 viewVector;
-              uniform float c;
-              uniform float p;
-              varying float intensity;
-              void main() {
-                vec3 vNormal = normalize( normalMatrix * normal );
-                vec3 vViewPosition = normalize( modelViewMatrix * vec4( position, 1.0 ) ).xyz;
-                intensity = pow( c - dot(vNormal, vViewPosition), p );
-                gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
-              }
-            `,
-            fragmentShader: `
-              uniform vec3 glowColor;
-              varying float intensity;
-              void main() {
-                gl_FragColor = vec4( glowColor * intensity, 1.0 );
-              }
-            `,
-            side: THREE.FrontSide,
-            blending: THREE.AdditiveBlending,
-            transparent: true,
-            depthWrite: false,
-          },
-        ]}
-      />
-    </mesh>
-  );
-}
-
-function Sun({ onPlanetClick }) {
-  const meshRef = useRef();
-  const texture = useTexture(TEXTURES.sun);
-  const size = 8;
-  useFrame(() => {
-    if (meshRef.current) meshRef.current.rotation.y -= 0.002;
-  });
-
-  const handleClick = (e) => {
-    e.stopPropagation();
-    onPlanetClick({ name: "Sun", ref: meshRef, size: size });
-  };
-
-  return (
-    <group>
-      <mesh ref={meshRef} onClick={handleClick} onPointerOver={() => (document.body.style.cursor = "pointer")} onPointerOut={() => (document.body.style.cursor = "auto")}>
-        <sphereGeometry args={[size, 64, 64]} />
-        <meshBasicMaterial map={texture} color="#ffffff" toneMapped={false} />
-      </mesh>
-      <SunGlow color="#FF8C00" size={size} />
-      <pointLight intensity={5.0} distance={5000} decay={1} color="#ffddaa" />
-    </group>
-  );
-}
-
-function AnimatedStars() {
-  const starsRef = useRef();
-  useFrame(() => {
-    if (starsRef.current) starsRef.current.rotation.y += 0.00005;
-  });
-  return <Stars ref={starsRef} radius={5000} depth={60} count={20000} factor={4} saturation={0} fade={false} speed={1} />;
-}
-
-function OrbitPath({ radius }) {
-  return (
-    <mesh rotation={[-Math.PI / 2, 0, 0]}>
-      <ringGeometry args={[radius - 0.2, radius + 0.2, 512]} />
-      <meshBasicMaterial color="#ffffff" transparent opacity={0.12} side={THREE.DoubleSide} />
-    </mesh>
-  );
-}
-
-function Hitbox({ size, onClick }) {
-  return (
-    <mesh onClick={onClick} visible={false}>
-      <sphereGeometry args={[size * 5, 16, 16]} />
-      <meshBasicMaterial />
-    </mesh>
-  );
-}
-
-// --- 5. PLANET COMPONENTS ---
-function Moon({ size, distance, orbitSpeed, onPlanetClick }) {
-  const moonRef = useRef();
-  const texture = useTexture(TEXTURES.moon);
-  const angleRef = useRef(Math.random() * Math.PI * 2);
-
-  useFrame((state, delta) => {
-    if (moonRef.current) {
-      angleRef.current += delta * orbitSpeed * 0.1;
-      const x = Math.sin(angleRef.current) * distance;
-      const z = Math.cos(angleRef.current) * distance;
-      moonRef.current.position.set(x, 0, z);
-      moonRef.current.rotation.y += 0.005;
-    }
-  });
-
-  const handleClick = (e) => {
-    e.stopPropagation();
-    onPlanetClick({ name: "Moon", ref: moonRef, size: size });
-  };
-
-  return (
-    <group>
-      <mesh rotation={[-Math.PI / 2, 0, 0]}>
-        <ringGeometry args={[distance - 0.02, distance + 0.02, 64]} />
-        <meshBasicMaterial color="#555" transparent opacity={0.3} side={THREE.DoubleSide} />
-      </mesh>
-      <group ref={moonRef}>
-        <mesh onClick={handleClick} onPointerOver={() => (document.body.style.cursor = "pointer")} onPointerOut={() => (document.body.style.cursor = "auto")} castShadow receiveShadow>
-          <sphereGeometry args={[size, 32, 32]} />
-          <meshStandardMaterial map={texture} metalness={0.1} roughness={0.8} />
-        </mesh>
-        <Hitbox size={size} onClick={handleClick} />
-      </group>
-    </group>
-  );
-}
-
-function PlanetClouds({ textureUrl, size }) {
-  const texture = useTexture(textureUrl);
-  const cloudsRef = useRef();
-  useFrame(() => {
-    if (cloudsRef.current) cloudsRef.current.rotation.y += 0.0015;
-  });
-  return (
-    <mesh ref={cloudsRef} scale={[1.01, 1.01, 1.01]}>
-      <sphereGeometry args={[size, 64, 64]} />
-      <meshStandardMaterial map={texture} transparent={true} opacity={0.8} blending={THREE.AdditiveBlending} side={THREE.DoubleSide} />
-    </mesh>
-  );
-}
-
-function SafeClouds({ textureUrl, size }) {
-  return (
-    <Suspense fallback={null}>
-      <PlanetClouds textureUrl={textureUrl} size={size} />
-    </Suspense>
-  );
-}
-
-function PlanetRing({ textureKey, size, isVertical }) {
-  const texture = useTexture(TEXTURES[textureKey]);
-  const geometryRef = useRef();
-  useEffect(() => {
-    if (geometryRef.current && texture) {
-      const geo = geometryRef.current;
-      const pos = geo.attributes.position;
-      const uvs = geo.attributes.uv;
-      for (let i = 0; i < pos.count; i++) {
-        const x = pos.getX(i);
-        const y = pos.getY(i);
-        const len = Math.sqrt(x * x + y * y);
-        const u = (len - size * 1.4) / (size * 1.0); // normalized-ish
-        uvs.setXY(i, u, 0.5);
+      // Extra (like clouds)
+      if (extra === "earthClouds") {
+        const cloudGeo = new THREE.SphereGeometry(size + 0.5, 64, 64);
+        const cloudMat = new THREE.MeshStandardMaterial({
+          map: loader.load("/textures/2k_earth_clouds.jpg"),
+          transparent: true,
+          opacity: 0.9,
+        });
+        const clouds = new THREE.Mesh(cloudGeo, cloudMat);
+        mesh.add(clouds);
+        mesh.clouds = clouds;
       }
-      uvs.needsUpdate = true;
-    }
-  }, [size, texture]);
 
-  const rotation = isVertical ? [0, 0, 0] : [-Math.PI / 2, 0, 0];
-  return (
-    <mesh rotation={rotation}>
-      <ringGeometry ref={geometryRef} args={[size * 1.4, size * 2.4, 128]} />
-      <meshStandardMaterial map={texture} opacity={0.85} transparent side={THREE.DoubleSide} />
-    </mesh>
-  );
-}
+      scene.add(group);
 
-function Planet({
-  name,
-  textureKey,
-  distance,
-  startAngle = Math.random() * Math.PI * 2,
-  orbitSpeed = 0.5,
-  size = 1,
-  onPlanetClick,
-  hasAtmosphere = false,
-  hasClouds = false,
-  hasRings = false,
-  ringTextureKey,
-  isVerticalRing = false,
-  tilt = 0,
-  children,
-}) {
-  const orbitGroupRef = useRef();
-  const spinMeshRef = useRef();
-  const texture = useTexture(TEXTURES[textureKey] || TEXTURES.moon);
-  const angleRef = useRef(startAngle);
-
-  useFrame((state, delta) => {
-    if (orbitGroupRef.current) {
-      angleRef.current += delta * orbitSpeed * 0.05;
-      const x = Math.sin(angleRef.current) * distance;
-      const z = Math.cos(angleRef.current) * distance;
-      orbitGroupRef.current.position.set(x, 0, z);
-    }
-    if (spinMeshRef.current) spinMeshRef.current.rotation.y += 0.005;
-  });
-
-  const handleClick = (e) => {
-    e.stopPropagation();
-    onPlanetClick({ name, ref: orbitGroupRef, size });
-  };
-
-  return (
-    <group>
-      <OrbitPath radius={distance} />
-      <group ref={orbitGroupRef}>
-        <group rotation={[tilt, 0, isVerticalRing ? Math.PI / 2 : 0]}>
-          <group ref={spinMeshRef}>
-            <mesh onClick={handleClick} onPointerOver={() => (document.body.style.cursor = "pointer")} onPointerOut={() => (document.body.style.cursor = "auto")} castShadow receiveShadow>
-              <sphereGeometry args={[size, 64, 64]} />
-              <meshStandardMaterial map={texture} metalness={0.2} roughness={0.8} />
-            </mesh>
-            {hasClouds && <SafeClouds textureUrl={TEXTURES.earthClouds} size={size} />}
-            {hasAtmosphere && (
-              <mesh scale={[1.02, 1.02, 1.02]}>
-                <sphereGeometry args={[size, 64, 64]} />
-                <meshPhongMaterial color="#4da6ff" transparent opacity={0.2} side={THREE.BackSide} blending={THREE.AdditiveBlending} />
-              </mesh>
-            )}
-          </group>
-          {hasRings && <PlanetRing textureKey={ringTextureKey} size={size} isVertical={isVerticalRing} />}
-        </group>
-        {children}
-        <Hitbox size={size} onClick={handleClick} />
-      </group>
-    </group>
-  );
-}
-
-// --- 6. CAMERA CONTROLLER ---
-function CameraController({ focusedPlanet, setFocusedPlanet }) {
-  const { camera, controls } = useThree();
-  const isTransitioning = useRef(false);
-  const isResetting = useRef(false);
-  const previousTargetPos = useRef(new THREE.Vector3());
-
-  useEffect(() => {
-    if (focusedPlanet) {
-      isTransitioning.current = true;
-      isResetting.current = false;
-    }
-  }, [focusedPlanet]);
-
-  useEffect(() => {
-    const handleReset = () => {
-      isResetting.current = true;
-      setFocusedPlanet(null);
+      return { mesh, group, speed, name };
     };
-    window.addEventListener("reset-camera", handleReset);
-    return () => window.removeEventListener("reset-camera", handleReset);
-  }, [setFocusedPlanet]);
 
-  useFrame((state, delta) => {
-    if (!controls || !camera) return;
+    // === Create Planets ===
+    const planets = [
+      createPlanet("2k_mercury.jpg", 2, 12, 0.04, "Mercury"),
+      createPlanet("2k_venus_surface.jpg", 4, 18, 0.03, "Venus"),
+      createPlanet(
+        "2k_earth_surface.jpg",
+        5,
+        24,
+        0.025,
+        "Earth",
+        "earthClouds"
+      ),
+      createPlanet("2k_mars.jpg", 4, 30, 0.02, "Mars"),
+      createPlanet("2k_jupiter.jpg", 10, 40, 0.015, "Jupiter"),
+      createPlanet("2k_saturn.jpg", 9, 55, 0.01, "Saturn"),
+      createPlanet("2k_uranus.jpg", 7, 65, 0.008, "Uranus"),
+      createPlanet("2k_neptune.jpg", 7, 75, 0.007, "Neptune"),
+    ];
 
-    // Reset to home
-    if (isResetting.current && !focusedPlanet) {
-      const currentPos = camera.position.clone();
-      const safeDist = 250;
-      const targetDist = Math.max(currentPos.length(), safeDist);
-      const homePos = currentPos.clone().normalize().multiplyScalar(targetDist);
-      if (homePos.y < 50) homePos.y = 50;
+    // === Sun ===
+    const sunTexture = loader.load("/textures/sun.jpg");
+    const sunGeo = new THREE.SphereGeometry(12, 64, 64);
+    const sunMat = new THREE.MeshBasicMaterial({ map: sunTexture });
+    const sun = new THREE.Mesh(sunGeo, sunMat);
+    scene.add(sun);
 
-      controls.target.lerp(new THREE.Vector3(0, 0, 0), 0.05);
-      camera.position.lerp(homePos, 0.05);
+    // === Animation ===
+    function animate() {
+      requestAnimationFrame(animate);
 
-      if (controls.target.distanceTo(new THREE.Vector3(0, 0, 0)) < 1) isResetting.current = false;
+      planets.forEach((p) => {
+        p.group.rotation.y += p.speed;
+        p.mesh.rotation.y += 0.004;
+
+        if (p.mesh.clouds) p.mesh.clouds.rotation.y += 0.002;
+      });
+
+      sun.rotation.y += 0.002;
+
       controls.update();
-      return;
+      renderer.render(scene, camera);
     }
 
-    if (focusedPlanet && focusedPlanet.ref && focusedPlanet.ref.current) {
-      const targetPos = new THREE.Vector3();
-      focusedPlanet.ref.current.getWorldPosition(targetPos);
+    animate();
 
-      const sunPos = new THREE.Vector3(0, 0, 0);
-      const directionToSun = new THREE.Vector3().subVectors(sunPos, targetPos).normalize();
-      const dist = focusedPlanet.name === "Sun" ? focusedPlanet.size * 4 : focusedPlanet.size * 5 + 15;
-      const desiredCamPos = targetPos.clone().add(directionToSun.multiplyScalar(dist));
-      desiredCamPos.y += focusedPlanet.size * 2;
+    // === Resize Handler ===
+    const handleResize = () => {
+      renderer.setSize(mount.clientWidth, mount.clientHeight);
+      camera.aspect = mount.clientWidth / mount.clientHeight;
+      camera.updateProjectionMatrix();
+    };
+    window.addEventListener("resize", handleResize);
 
-      if (isTransitioning.current) {
-        controls.target.lerp(targetPos, 0.05);
-        camera.position.lerp(desiredCamPos, 0.05);
-
-        if (camera.position.distanceTo(desiredCamPos) < 0.5) {
-          isTransitioning.current = false;
-          previousTargetPos.current.copy(targetPos);
-        }
-      } else {
-        // Keep camera relative to moving planet (so camera follows)
-        const deltaMove = new THREE.Vector3().subVectors(targetPos, previousTargetPos.current);
-        camera.position.add(deltaMove);
-        controls.target.copy(targetPos);
-        previousTargetPos.current.copy(targetPos);
-      }
-
-      // Auto-Exit: if camera drifts too far from the target object, reset focus
-      if (!isTransitioning.current && camera.position.distanceTo(targetPos) > dist + 60) {
-        setFocusedPlanet(null);
-      }
-    } else {
-      // Safe drift towards origin
-      controls.target.lerp(new THREE.Vector3(0, 0, 0), 0.05);
-      if (camera.position.length() < 80) {
-        camera.position.lerp(camera.position.clone().normalize().multiplyScalar(120), 0.05);
-      }
-    }
-
-    controls.update();
-  });
-
-  return null;
-}
-
-// --- 7. MAIN APP ---
-export default function App() {
-  const [focusedPlanet, setFocusedPlanet] = useState(null);
-
-  const handlePlanetClick = (data) => {
-    if (focusedPlanet && focusedPlanet.name === data.name) return;
-    setFocusedPlanet(data);
-  };
-
-  const handleReturn = () => {
-    window.dispatchEvent(new Event("reset-camera"));
-  };
+    // Cleanup
+    return () => {
+      mount.removeChild(renderer.domElement);
+      window.removeEventListener("resize", handleResize);
+    };
+  }, []);
 
   return (
-    <div style={{ width: "100vw", height: "100vh", background: "#050508", overflow: "hidden" }}>
-      <div style={{ position: "absolute", top: 20, width: "100%", textAlign: "center", zIndex: 10, pointerEvents: "none" }}>
-        <h1 style={{ color: "white", fontFamily: "'Inter', sans-serif", fontWeight: "200", letterSpacing: "10px", fontSize: "2rem", margin: 0, textShadow: "0 0 25px rgba(77, 181, 255, 0.4)" }}>
-          SOLAR SYSTEM
-        </h1>
+    <div className="App">
+      <div className="canvas-container" ref={mountRef}></div>
+
+      {/* Trending Bottom Card */}
+      <div className="bottom-card">
+        {selectedPlanet ? (
+          <>
+            <h3>{selectedPlanet.name}</h3>
+            <p>Distance from Sun: {selectedPlanet.distance} M km</p>
+            <p>Diameter: {selectedPlanet.diameter} km</p>
+          </>
+        ) : (
+          <p className="placeholder">Tap any planet to see details</p>
+        )}
       </div>
-
-      {focusedPlanet && (
-        <button
-          onClick={handleReturn}
-          style={{
-            position: "absolute",
-            bottom: 40,
-            left: "50%",
-            transform: "translateX(-50%)",
-            zIndex: 20,
-            padding: "14px 32px",
-            background: "rgba(20, 20, 30, 0.85)",
-            color: "#4db5ff",
-            border: "1px solid rgba(77, 181, 255, 0.4)",
-            borderRadius: "40px",
-            fontSize: "0.9rem",
-            fontWeight: "bold",
-            backdropFilter: "blur(12px)",
-            cursor: "pointer",
-            letterSpacing: "1px",
-            boxShadow: "0 0 20px rgba(0,0,0,0.6)",
-          }}
-        >
-          RETURN TO ORBIT
-        </button>
-      )}
-
-      <PlanetHUD focusedPlanet={focusedPlanet} onClose={handleReturn} />
-
-      <Canvas camera={{ position: [0, 150, 250], fov: 45, far: 20000 }} dpr={[1, 2]}>
-        <Suspense fallback={null}>
-          {/* Basic ambient + fill lights */}
-          <ambientLight intensity={0.1} />
-          <directionalLight position={[50, 100, 50]} intensity={0.6} />
-          <pointLight position={[0, 0, 0]} intensity={0.4} />
-
-          {/* Controls must be present for CameraController to read controls from useThree */}
-          <OrbitControls enableDamping makeDefault minDistance={20} maxDistance={2000} />
-
-          {/* Camera controller reads orbit controls via useThree */}
-          <CameraController focusedPlanet={focusedPlanet} setFocusedPlanet={setFocusedPlanet} />
-
-          {/* Background stars */}
-          <AnimatedStars />
-
-          {/* Sun */}
-          <Sun onPlanetClick={handlePlanetClick} />
-
-          {/* Planets (distances and sizes are scaled for visual clarity) */}
-          <Planet name="Mercury" textureKey="mercury" distance={18} orbitSpeed={1.2} size={0.8} onPlanetClick={handlePlanetClick} />
-          <Planet name="Venus" textureKey="venus" distance={28} orbitSpeed={0.9} size={1.6} onPlanetClick={handlePlanetClick} />
-          <Planet name="Earth" textureKey="earth" distance={38} orbitSpeed={0.8} size={1.7} onPlanetClick={handlePlanetClick} hasClouds hasAtmosphere>
-            <Moon size={0.45} distance={3.5} orbitSpeed={1.8} onPlanetClick={handlePlanetClick} />
-          </Planet>
-          <Planet name="Mars" textureKey="mars" distance={52} orbitSpeed={0.7} size={1.2} onPlanetClick={handlePlanetClick} />
-          <AsteroidBelt />
-          <Planet name="Jupiter" textureKey="jupiter" distance={95} orbitSpeed={0.5} size={4.0} onPlanetClick={handlePlanetClick} />
-          <Planet name="Saturn" textureKey="saturn" distance={130} orbitSpeed={0.45} size={3.6} onPlanetClick={handlePlanetClick} hasRings ringTextureKey="saturnRing" />
-          <Planet name="Uranus" textureKey="uranus" distance={170} orbitSpeed={0.35} size={2.6} onPlanetClick={handlePlanetClick} tilt={Math.PI / 24} />
-          <Planet name="Neptune" textureKey="neptune" distance={200} orbitSpeed={0.3} size={2.5} onPlanetClick={handlePlanetClick} />
-
-        </Suspense>
-      </Canvas>
-
-      {/* Drei Loader (keeps showing while textures/models load) */}
-      <Loader />
     </div>
   );
 }
+
+export default App;
